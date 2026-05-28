@@ -1,0 +1,32 @@
+{
+  "store_history_row": {
+    "date": "2026-01-01",
+    "store_name": "示例门店",
+    "revenue": 18000.0,
+    "customer_count": 120,
+    "avg_ticket": 150.0,
+    "month_yoy": -5.0,
+    "discount_rate": 28.5,
+    "dine_in_ratio": 85.0,
+    "takeaway_ratio": 10.0,
+    "roast_duck_sales": 36.0,
+    "warning_level": "警示",
+    "summary": "示例：收入小幅下滑，折扣率可控",
+    "suggestions": "示例：优化套餐推荐 | 示例：跟踪午市客流"
+  },
+  "extraction_sources": {
+    "direct_from_image": [
+      "date",
+      "store_name",
+      "revenue",
+      "customer_count"
+    ],
+    "inferred_by_rules": [
+      "month_yoy",
+      "discount_rate",
+      "warning_level",
+      "summary",
+      "suggestions"
+    ]
+  }
+}

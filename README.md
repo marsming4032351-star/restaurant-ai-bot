@@ -1,0 +1,288 @@
+> 🤖 **新进入本项目的智能体，请先阅读 `PROJECT_MEMORY.md` 与 `docs/AGENT_ONBOARDING.md`。**
+
+# 便宜坊日报助手
+
+餐厅经营日报截图 / Excel → AI 分析 → 飞书互动卡片自动推送。
+
+把每天的日报截图交给 Claude 读取数字，生成标准 Excel，再一条命令跑出带 KPI、诊断、建议的飞书卡片。
+
+---
+
+## 1. 项目用途
+
+- **输入**：日报截图（PNG）或已有 Excel
+- **处理**：解析字段 → 调千问 / Claude 生成经营诊断 → matplotlib 出 4 张分析图
+- **输出**：推送到飞书群的互动卡片，含标题色块、KPI 数据、AI 分析、明日建议
+
+最终目标：做成 CaiHub 餐饮经营数据日报 Agent 的雏形，支持多店、自动异常预警、趋势分析。
+
+详细 workflow 见 `docs/WORKFLOWS.md`。
+
+---
+
+## 2. 文件结构
+
+```
+restaurant-ai-bot/
+├── main.py               # 主入口：解析 → AI 诊断 → 出图 → 推送
+├── parser.py             # 第1层：关键字定位法读取二维 Excel
+├── analyst.py            # 第2层：调 LLM 输出结构化诊断 JSON
+├── visualizer.py         # 第3层：matplotlib 出 4 张分析图
+├── feishu_bot.py         # 第4层：构造飞书互动卡片并推送
+├── image_to_excel.py     # 辅助：Claude 读图后的 JSON → 标准 Excel
+├── config.py             # 从 .env 读取凭证和路径
+├── field_map.yaml        # 中文字段名 → 标准字段名映射表
+├── prompts/
+│   └── diagnose.txt      # AI 诊断 prompt（连锁餐饮 5 步分析法）
+├── data/                 # 日报 Excel 放这里
+├── output/               # 生成的 4 张分析图 + report JSON
+├── raw_images/           # 日报原始截图放这里
+├── test/                 # 测试图片（0524～0527.png）
+├── .env                  # 本地凭证（不提交 git）
+├── .env.example          # 配置模板
+├── PROJECT_MEMORY.md     # 项目长期记忆，新会话先读这个
+└── README.md             # 本文件
+```
+
+---
+
+## 3. 环境准备
+
+Python 3.9+，安装依赖：
+
+```bash
+pip3 install -r requirements.txt openai
+```
+
+---
+
+## 4. 配置飞书 Webhook
+
+### 第一步：创建自定义机器人（发卡片用，必须）
+
+1. 打开飞书群 → 右上角「设置」→「群机器人」→「添加机器人」→「自定义机器人」
+2. 安全设置里「关键词」填：`日报`
+3. 复制生成的 Webhook 地址
+
+### 第二步（可选）：创建自建 App（发图片用）
+
+不配置此项，4 张分析图只存本地 `output/`，不会发到群里。
+
+1. 打开 [https://open.feishu.cn/app](https://open.feishu.cn/app)
+2. 「创建企业自建应用」→ 开通「机器人」能力
+3. 「权限管理」→ 搜索并开通 `im:resource`（上传图片）
+4. 「版本管理与发布」→ 创建版本 → 申请发布
+5. 在群里把这个机器人加进来
+6. 「凭证与基础信息」→ 复制 App ID 和 App Secret
+
+---
+
+## 5. 配置 .env
+
+```bash
+cp .env.example .env
+# 用编辑器打开 .env 填写以下内容
+```
+
+```env
+# 必填
+FEISHU_WEBHOOK=https://open.feishu.cn/open-apis/bot/v2/hook/你的地址
+
+# 可选（发图片用）
+FEISHU_APP_ID=cli_xxxxxxxxxxxxxxxx
+FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
+
+# LLM（当前用阿里百炼）
+LLM_PROVIDER=openai
+LLM_API_KEY=你的百炼API_KEY
+LLM_MODEL=qwen3.6-plus
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
+---
+
+## 6. 运行 main.py
+
+```bash
+# 指定 Excel 文件
+python3 main.py --file data/便宜坊马连道_2026-05-26.xlsx
+
+# 指定日期（自动在 data/ 找对应文件）
+python3 main.py --date 2026-05-26
+```
+
+运行后会依次：
+1. 解析 Excel，提取结构化字段
+2. 调 LLM 生成诊断 JSON
+3. matplotlib 出 4 张图存入 `output/`
+4. 推送飞书互动卡片（KPI + 诊断 + 建议）
+5. 若配置了 App 凭证，还会逐张上传并发送分析图
+
+---
+
+## 7. 替换日报数据
+
+### 方式 A：手上只有截图（当前主要方式）
+
+```
+第1步：把截图放入 raw_images/
+第2步：把图片发给 Claude，Claude 输出 JSON
+第3步：运行 image_to_excel.py
+第4步：运行 main.py
+```
+
+```bash
+python3 image_to_excel.py --date 2026-05-28 --json '{
+  "本日收入": 20617.78,
+  "来客数": 133,
+  "烤鸭_日累计": 38.5,
+  "烤鸭_月累计": 1648,
+  ...
+}'
+```
+
+> **注意**：日报中重复出现的「日累计/月累计」需加大类前缀区分：
+> `烤鸭_月累计`、`套餐_日累计`、`鱼类_月累计`、`位吃_月累计` 等
+
+生成的 Excel 自动存入 `data/便宜坊马连道_YYYY-MM-DD.xlsx`。
+
+### 方式 B：已有 Excel 文件
+
+直接把文件放入 `data/`，运行 `main.py --file` 即可。
+
+---
+
+## 8. 周报
+
+### 手动生成上周周报
+
+```bash
+# 标准用法：自动计算上周一～上周日
+python3 weekly_report.py --last-week
+
+# 验证统计范围和卡片结构（不推送飞书）
+python3 weekly_report.py --last-week --dry-run
+
+# 指定任意日期范围
+python3 weekly_report.py --start 2026-05-20 --end 2026-05-26
+
+# 最近 N 天
+python3 weekly_report.py --days 14
+```
+
+### 每周一自动运行（crontab）
+
+**第一步：确认脚本可执行**
+
+```bash
+ls -la scripts/run_weekly.sh   # 应有 -rwxr-xr-x
+```
+
+**第二步：将以下配置写入 crontab**
+
+```
+0 9 * * 1 /Users/ming/Restaurant/restaurant-ai-bot/scripts/run_weekly.sh >> /Users/ming/Restaurant/restaurant-ai-bot/logs/cron_weekly.log 2>&1
+```
+
+编辑 crontab：
+```bash
+crontab -e
+# 粘贴上面那行，保存退出
+```
+
+确认已写入：
+```bash
+crontab -l
+```
+
+### 日志文件位置
+
+| 日志 | 路径 | 内容 |
+|------|------|------|
+| 周报运行日志 | `logs/weekly_report.log` | 每次运行的详细输出 |
+| cron 系统日志 | `logs/cron_weekly.log` | cron 触发时的 stdout/stderr |
+
+### 如何确认推送成功
+
+```bash
+# 查看最新日志
+tail -20 logs/weekly_report.log
+
+# 成功标志：
+# [weekly] ✅ 周报已推送到飞书群
+# [时间戳] ✅ 周报推送成功
+
+# 失败时排查：
+# 1. 检查飞书群是否收到消息
+# 2. 确认 .env 中 FEISHU_WEBHOOK 配置正确
+# 3. 确认 data/store_history.csv 有上周数据
+python3 weekly_report.py --last-week --dry-run   # 先干跑验证
+```
+
+---
+
+## 9. 排障
+
+| 现象 | 原因 | 解决 |
+|------|------|------|
+| `未找到字段: ['xxx']` | yaml 里字段名与实际表格不一致 | 修改 `field_map.yaml` |
+| 图表中文显示方块 | 缺中文字体 | macOS 已用 Arial Unicode MS 修复；Linux 装 `fonts-noto-cjk` |
+| 图片未发到飞书 | 未配置 App 凭证 | 在 `.env` 填 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` |
+| 飞书 token 报错 | 缓存过期 | 删除 `output/.feishu_token.json` |
+| LLM 返回不是 JSON | 模型输出偏离 prompt | 降低 temperature 或换模型 |
+
+---
+
+## 9. 后续开发计划
+
+- [ ] 标准化输入：支持 `daily/` 文件夹批量处理多日图片
+- [ ] 建立 `data_schema.json`：定义字段结构、类型、异常阈值
+- [ ] 异常规则引擎：同比跌 >15%、折扣率 >40%、套餐挂零等自动告警
+- [ ] 趋势分析：基于 `history.parquet` 做 7 日 / 30 日对比图
+- [ ] 图片推送：配置自建 App `im:resource` 权限，发 4 张分析图
+- [ ] 多店支持：适配御炉通明湖等不同格式门店
+- [x] 周报定时任务：每周一 9:00 cron 自动生成上周周报（`scripts/run_weekly.sh`）
+- [ ] 日报定时任务：每天 8:00 cron 自动跑昨日日报
+
+---
+
+## 10. 智能体接入说明
+
+> 本章面向 Claude / Codex / 其他 AI 智能体。人类开发者可跳过。
+
+### 进入项目的第一件事（必须）
+
+1. **先读文档，再动代码**
+   - `PROJECT_MEMORY.md` — 项目状态、已完成功能、当前已知问题
+   - `docs/AGENT_ONBOARDING.md` — 完整接入说明（禁止事项 / 流程 / 健康检查）
+
+2. **确认当前功能状态**
+   ```bash
+   ls -la data/store_history.csv   # 核心历史数据必须存在
+   ls -la .env                      # 凭证文件必须存在（不要打印内容）
+   python3 weekly_report.py --last-week --dry-run   # 验证链路是否跑通
+   crontab -l                       # 查看定时任务状态
+   ```
+
+3. **不要一上来就重写项目**
+   - `main.py` 已跑通日报全流程，改动前必须充分测试
+   - `data/store_history.csv` 是核心数据资产，禁止覆盖或删除
+
+### 敏感信息处理
+
+- `.env` 包含飞书 Webhook、LLM API Key 等，**不要打印或输出其内容**
+- 不要将 webhook 地址写入代码，统一从 `config.py` 读取
+
+### 修改自动化任务前必须确认
+
+如需修改或新增 crontab 定时任务，**必须先把方案输出给用户确认**，不要直接执行 `crontab -e`。
+
+### 周期参数说明
+
+| 参数 | 含义 | 注意 |
+|------|------|------|
+| `--last-week` | 上周一 ～ 上周日（固定完整周） | 推荐用法 |
+| `--days 7` | 最近 7 个自然日（含今天） | 与上方**不等价** |
+| `--start / --end` | 指定任意日期范围 | 用于补跑历史 |
+
+详细说明见 `docs/AGENT_ONBOARDING.md`。

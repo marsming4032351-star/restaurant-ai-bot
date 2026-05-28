@@ -1,0 +1,84 @@
+# ============================================================
+# 便宜坊门店日报字段映射 - 你以后表格小改只需要改这个文件
+# ============================================================
+# 解析逻辑:在 Excel 里搜这些"中文 key",找到后取它【右边一格】的数值
+# 如果找不到,字段默认填 0,不会让脚本崩
+# ============================================================
+
+# 元信息(从文件名或标题里抓)
+meta:
+  # 文件名匹配日期的正则(以下任一即可)
+  # 例:2026-05-27.xlsx、20260527.xlsx、便宜坊马连道_2026-05-27.xlsx
+  date_patterns:
+    - '(\d{4})-(\d{1,2})-(\d{1,2})'
+    - '(\d{4})(\d{2})(\d{2})'
+  store_name: "便宜坊马连道"   # 暂时硬编码,多店时改成从文件名抓
+  store_id: "MLD"
+
+# ---------- 营业收入(左半表)----------
+revenue:
+  本日收入: revenue_today
+  月累计收入: revenue_month_to_date
+  日折前营业额: revenue_today_before_discount
+  月折前营业额累计: revenue_mtd_before_discount   # 第二列那个 1467605.04
+  同期月累计收入: revenue_same_period_last_year
+  同比月累计收入差额: revenue_yoy_delta
+  堂食收入: dine_in_revenue
+  堂食外卖收入: dine_in_takeaway_revenue
+  本日线上外卖收入: online_takeaway_revenue
+  月线上外卖累计收入: online_takeaway_mtd
+  本日会员储值: member_recharge_today
+  月累计会员储值: member_recharge_mtd
+  免单金额: free_amount
+  进货金额: purchase_amount
+
+# ---------- 会员消费(红色块)----------
+member_consumption:
+  堂食会员消费收入: member_revenue
+  堂食会员消费占比: member_revenue_ratio
+  堂食正价消费收入: full_price_revenue
+  堂食原价消费占比: full_price_ratio
+  堂食其他优惠消费收入: discount_revenue
+  堂食其他优惠消费占比: discount_ratio
+
+# ---------- 客流 ----------
+traffic:
+  来客数: customer_count
+  客单价: avg_check
+  发放1416烤鸭券数量: rebate_coupon_issued
+  回收1416烤鸭券数量: rebate_coupon_redeemed
+  烤鸭券带来收入: coupon_revenue
+  回收100元代金券数量: cash_coupon_redeemed
+  代金券带来收入: cash_coupon_revenue
+
+# ---------- 菜品销售(右半表,按大类分组)----------
+# 每个大类下面是【该类下的菜品名 → 标准名】
+dish_categories:
+  烤鸭类:
+    堂食烤鸭日销售数量: roasted_duck_dine_in
+    迷你烤鸭日销售数量: mini_duck
+    线上外卖烤鸭日销售数量: roasted_duck_online
+    椒盐_香辣鸭架日销售数量: spiced_duck_rack
+    烤鸭烧饼日销售数量: sesame_cake
+    烤鸭小料日销售数量: duck_sauce
+    烧饼占比: sesame_cake_ratio
+    鸭架占比: duck_rack_ratio
+  套餐类:
+    3人套餐日销售数量: set_meal_3p
+    6人套餐日销售数量: set_meal_6p
+    8人套餐日销售数量: set_meal_8p
+    10人套餐日销售数量: set_meal_10p
+    12人套餐日销售数量: set_meal_12p
+    松叶蟹套餐日销售数量: crab_set_meal
+    乳鸽日销售数量: pigeon
+  鱼类_牛掌:
+    鳜鱼套日销售数量: mandarin_fish
+    鱼类日销售数量: fish_total
+    海参_烧绘牛掌日销售数量: sea_cucumber_beef_paw
+  位吃_甜品:
+    点心日销售数量: dessert
+    位吃日销售数量: per_seat_dish
+    甜品日销售数量: sweet
+    自制饮品日销售数量: house_drink
+  精酿:
+    精酿啤酒日销售数量: craft_beer

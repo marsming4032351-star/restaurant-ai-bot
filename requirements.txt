@@ -1,0 +1,10 @@
+pandas>=2.0
+openpyxl>=3.1
+matplotlib>=3.7
+requests>=2.31
+python-dotenv>=1.0
+openai>=1.0              # OpenAI-compatible LLM API, e.g. Qwen/DashScope
+anthropic>=0.40          # 用 Claude;若用 OpenAI 改成 openai>=1.0
+Pillow>=10.0             # 图片压缩
+pyyaml>=6.0              # 读 field_map.yaml
+pyarrow>=14.0            # 存 history.parquet

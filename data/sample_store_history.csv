@@ -1,0 +1,3 @@
+date,store_name,revenue,customer_count,avg_ticket,month_yoy,discount_rate,dine_in_ratio,takeaway_ratio,roast_duck_sales,warning_level,summary,suggestions
+2026-01-01,示例门店,18000.00,120,150.00,-5.00,28.50,85.00,10.00,36.0,警示,示例：收入小幅下滑，折扣率可控,示例：优化套餐推荐 | 示例：跟踪午市客流
+2026-01-02,示例门店,22500.00,150,150.00,3.20,24.00,88.00,8.50,42.0,健康,示例：收入和客流恢复，主力品类表现稳定,示例：保持烤鸭推荐 | 示例：复盘高峰时段排班

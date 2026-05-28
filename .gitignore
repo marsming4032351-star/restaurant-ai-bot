@@ -1,0 +1,43 @@
+# Credentials and local environment
+.env
+.env.*
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# OS / editor noise
+.DS_Store
+.vscode/
+.idea/
+
+# Runtime logs and generated outputs
+logs/
+output/*.png
+output/*.json
+output/*.log
+output/.feishu_token.json
+
+# Local data and sensitive business records
+data/store_history.csv
+data/sample_data.json
+daily/*.json
+*.xlsx
+*.xls
+*.csv
+*.parquet
+
+# Local raw captures and backups
+raw_images/
+test/*.png
+.backup_v2/
+
+# Safe sample data that may be committed
+!daily/sample_daily.json
+!data/sample_store_history.csv
+!data/data_schema.json

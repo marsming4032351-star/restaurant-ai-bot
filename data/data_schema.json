@@ -1,0 +1,113 @@
+{
+  "version": "1.0",
+  "description": "便宜坊日报结构化字段定义（store_history.csv 表头说明）",
+  "fields": {
+    "date": {
+      "type": "string",
+      "format": "YYYY-MM-DD",
+      "description": "日报日期",
+      "example": "2026-05-26",
+      "required": true
+    },
+    "store_name": {
+      "type": "string",
+      "description": "门店名称",
+      "example": "便宜坊马连道",
+      "required": true
+    },
+    "revenue": {
+      "type": "float",
+      "unit": "元",
+      "description": "本日实收营业收入（折后）",
+      "example": 23097.12,
+      "alert_threshold": "同比下滑 > 15% 触发警示",
+      "required": true
+    },
+    "customer_count": {
+      "type": "integer",
+      "unit": "人",
+      "description": "本日来客数（堂食）",
+      "example": 165,
+      "required": true
+    },
+    "avg_ticket": {
+      "type": "float",
+      "unit": "元/人",
+      "description": "客单价 = 堂食收入 / 来客数",
+      "example": 118.12,
+      "alert_threshold": "低于历史均值 10% 触发警示",
+      "required": true
+    },
+    "month_yoy": {
+      "type": "float",
+      "unit": "%",
+      "description": "月累计收入同比增长率（负数表示下滑）",
+      "example": -21.5,
+      "alert_threshold": "< -15 触发异常，< -5 触发警示",
+      "required": true
+    },
+    "discount_rate": {
+      "type": "float",
+      "unit": "%",
+      "description": "折扣率 = 1 - 实收/折前营业额，反映整体优惠力度",
+      "example": 44.78,
+      "alert_threshold": "> 40 触发警示，> 50 触发异常",
+      "required": true
+    },
+    "dine_in_ratio": {
+      "type": "float",
+      "unit": "%",
+      "description": "堂食收入占本日总收入的比例",
+      "example": 84.38,
+      "alert_threshold": "< 70 需关注外卖依赖",
+      "required": false
+    },
+    "takeaway_ratio": {
+      "type": "float",
+      "unit": "%",
+      "description": "线上外卖收入占本日总收入的比例",
+      "example": 12.4,
+      "required": false
+    },
+    "roast_duck_sales": {
+      "type": "float",
+      "unit": "只",
+      "description": "烤鸭日销售总量（堂食 + 迷你 + 线上外卖合计）",
+      "example": 42.0,
+      "alert_threshold": "< 20 触发警示",
+      "required": false
+    },
+    "warning_level": {
+      "type": "string",
+      "enum": ["健康", "警示", "异常"],
+      "description": "AI 综合判断的经营健康等级",
+      "example": "异常",
+      "required": true
+    },
+    "summary": {
+      "type": "string",
+      "description": "AI 一句话经营总结（含关键问题定位）",
+      "example": "月累计同比跌21.5%，折扣率44.8%侵蚀利润，正餐套餐全线挂零",
+      "required": true
+    },
+    "suggestions": {
+      "type": "string",
+      "description": "AI 明日建议，多条用 ' | ' 分隔",
+      "example": "紧急上线轻套餐 | 收紧折扣权限 | 增设外带专区",
+      "required": true
+    }
+  },
+  "alert_rules": {
+    "异常": [
+      "month_yoy < -15",
+      "discount_rate > 50",
+      "roast_duck_sales < 15"
+    ],
+    "警示": [
+      "month_yoy < -5",
+      "discount_rate > 40",
+      "avg_ticket < historical_avg * 0.9",
+      "roast_duck_sales < 25"
+    ]
+  }
+}
