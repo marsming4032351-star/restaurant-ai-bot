@@ -6,6 +6,20 @@
 
 把每天的日报截图交给 Claude 读取数字，生成标准 Excel，再一条命令跑出带 KPI、诊断、建议的飞书卡片。
 
+GitHub private repo：
+`https://github.com/marsming4032351-star/restaurant-ai-bot.git`
+
+项目当前能力：
+- 日报推送
+- 历史数据沉淀
+- 周报生成
+- 飞书卡片推送
+- workflow 文档
+- 智能体接入文档
+
+新开发者 / 新智能体进入项目后的第一步：
+先读 `PROJECT_MEMORY.md`、`README.md`、`docs/AGENT_ONBOARDING.md`、`docs/WORKFLOWS.md`。
+
 ---
 
 ## 1. 项目用途
@@ -53,6 +67,25 @@ Python 3.9+，安装依赖：
 ```bash
 pip3 install -r requirements.txt openai
 ```
+
+---
+
+## 3.1 Git 与安全
+
+常用 Git 命令：
+
+```bash
+git status
+git add .
+git commit -m "xxx"
+git push
+```
+
+安全提醒：
+- 不要提交 `.env`。
+- 不要提交真实经营数据。
+- 不要提交日志、Excel、图片、parquet 文件。
+- 提交前先用 `git status` 确认没有敏感文件进入暂存区。
 
 ---
 

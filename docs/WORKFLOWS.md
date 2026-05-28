@@ -209,6 +209,17 @@
 
 ## 当前可沉淀的 Skill 列表
 
+## GitHub 版本管理阶段
+
+当前项目已经进入 GitHub 版本管理阶段，仓库地址：
+`https://github.com/marsming4032351-star/restaurant-ai-bot.git`
+
+协作约定：
+- 文档变更、代码变更都需要 commit。
+- 每次重要功能完成后要更新 `PROJECT_MEMORY.md`。
+- 提交前运行 `git status`，确认没有 `.env`、真实经营数据、日志、Excel、图片、parquet 文件进入暂存区。
+- 当前仓库用于 CaiHub 餐饮经营数据 Agent 原型的版本管理，后续 Claude / Codex / 新智能体接入时应先读项目文档再改动。
+
 ### 报表解析 Skill
 
 将日报图片、Excel 或 daily JSON 转为统一结构化字段。核心能力包括字段识别、日期和门店识别、数值标准化、重复字段前缀处理，以及图片字段和推断字段的来源标注。

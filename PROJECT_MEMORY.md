@@ -17,6 +17,17 @@
 
 详细 workflow 见 `docs/WORKFLOWS.md`。
 
+当前仓库用于 **CaiHub 餐饮经营数据 Agent 原型** 的版本管理。
+
+GitHub private repo：
+`https://github.com/marsming4032351-star/restaurant-ai-bot.git`
+
+Git 状态：
+- 已完成本地 Git 初始化。
+- 已完成首次安全提交。
+- 已 push 到 GitHub private repo。
+- `.env`、真实 `store_history.csv`、真实日报 JSON、`logs/`、Excel、parquet、输出图均已通过 `.gitignore` 排除。
+
 ---
 
 ## 2. 技术栈 & 目录结构

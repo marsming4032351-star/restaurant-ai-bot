@@ -176,7 +176,9 @@ tail -20 logs/weekly_report.log
 | ❌ 删除 `logs/` 目录 | 运行日志，用于排查问题 |
 | ❌ 打印或输出 `.env` 内容 | 包含 webhook、API Key 等敏感信息 |
 | ❌ 直接重写 `main.py` | 已跑通的核心链路，改动需充分测试 |
+| ❌ 直接重写 `weekly_report.py` | 周报链路已跑通，改动需先说明方案并验证 |
 | ❌ 未经用户确认写入 crontab | 自动化任务影响系统，必须先输出方案确认 |
+| ❌ 把真实数据加入 git | 真实经营数据、日志、Excel、图片、parquet 均不应提交 |
 | ❌ 把 `--days 7` 等同于 `--last-week` | 前者是「最近 7 天」，后者是「上周一～上周日」，含义不同 |
 | ❌ 直接修改 `data/data_schema.json` 的告警阈值 | 阈值变化会影响历史数据的警示判断一致性 |
 
@@ -185,18 +187,29 @@ tail -20 logs/weekly_report.log
 ## 十一、快速健康检查（进入项目第一件事）
 
 ```bash
-# 1. 确认历史数据存在
+# 1. 确认 Git 状态，检查是否有未提交或敏感文件
+git status
+
+# 2. 确认历史数据存在
 ls -la data/store_history.csv
 
-# 2. 查看最近历史记录
+# 3. 查看最近历史记录
 python3 -c "import history; history.show_recent(7)"
 
-# 3. 确认 .env 配置存在（不要打印内容）
+# 4. 确认 .env 配置存在（不要打印内容）
 ls -la .env
 
-# 4. 验证周报功能（不推送）
+# 5. 验证周报功能（不推送）
 python3 weekly_report.py --last-week --dry-run
 
-# 5. 查看 crontab 状态
+# 6. 查看 crontab 状态，只读检查，不直接写入
 crontab -l
 ```
+
+进入项目后，修改任何功能前必须先阅读：
+- `PROJECT_MEMORY.md`
+- `README.md`
+- `docs/AGENT_ONBOARDING.md`
+- `docs/WORKFLOWS.md`
+
+如果要修改功能，先向用户说明方案、影响范围和验证方式，再动代码。不要打印 `.env` 敏感值，不要直接写入 crontab，不要把真实数据加入 git。

@@ -1,6 +1,7 @@
 # Credentials and local environment
 .env
 .env.*
+!.env.example
 
 # Python caches and virtual environments
 __pycache__/
