@@ -4,10 +4,18 @@
 要求 LLM 输出固定 JSON,后面的飞书卡片就可以稳定渲染。
 """
 from __future__ import annotations
+import datetime
 import json
 import re
 from pathlib import Path
 import config
+
+
+class _DateEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (datetime.date, datetime.datetime)):
+            return str(obj)
+        return super().default(obj)
 
 
 def _load_prompt() -> str:
@@ -62,7 +70,7 @@ def diagnose(daily: dict) -> dict:
     daily 形如 parser.enrich_with_history 的输出。
     """
     system = _load_prompt()
-    user = "请基于以下经营数据生成日报 JSON:\n```json\n" + json.dumps(daily, ensure_ascii=False, indent=2) + "\n```"
+    user = "请基于以下经营数据生成日报 JSON:\n```json\n" + json.dumps(daily, cls=_DateEncoder, ensure_ascii=False, indent=2) + "\n```"
 
     if config.LLM_PROVIDER == "anthropic":
         raw = _call_anthropic(system, user)

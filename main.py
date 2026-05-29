@@ -79,8 +79,14 @@ def run(report_date: date | None, store_id: str,
 
     # 落地一份 JSON 留档,方便复盘
     log_path = config.OUTPUT_DIR / f"report_{store_id}_{actual_date}.json"
+    import datetime
+    class _DateEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, (datetime.date, datetime.datetime)):
+                return str(obj)
+            return super().default(obj)
     log_path.write_text(json.dumps({"daily": daily, "report": report},
-                                   ensure_ascii=False, indent=2))
+                                   cls=_DateEncoder, ensure_ascii=False, indent=2))
 
 
 def main():

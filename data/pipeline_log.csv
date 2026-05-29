@@ -3,4 +3,4 @@ date,store_name,source_type,source_file,excel_file,normalized_json,report_file,f
 2026-05-25,便宜坊马连道,manual_json,,data/便宜坊马连道_2026-05-25.xlsx,,,true,2026-05-25T20:00:00+08:00,human,1.0,done,,2026-05-25T20:00:00+08:00,2026-05-25T20:00:00+08:00
 2026-05-26,便宜坊马连道,manual_json,,data/便宜坊马连道_2026-05-26.xlsx,,,true,2026-05-26T20:00:00+08:00,human,1.0,done,,2026-05-26T20:00:00+08:00,2026-05-26T20:00:00+08:00
 2026-05-27,便宜坊马连道,screenshot,raw_images/0527.png,data/便宜坊马连道_2026-05-27.xlsx,,,true,2026-05-27T20:06:00+08:00,codex,1.0,done,,2026-05-27T20:06:00+08:00,2026-05-27T20:06:00+08:00
-2026-05-28,便宜坊马连道,screenshot,TBD,data/便宜坊马连道_2026-05-28.xlsx,,,false,,human,1.0,pending,待处理_preview_only,2026-05-29T10:00:00+08:00,2026-05-29T10:00:00+08:00
+2026-05-28,便宜坊马连道,screenshot,TBD,data/便宜坊马连道_2026-05-28.xlsx,,,true,2026-05-29T10:30:00+08:00,claude-code,1.0,done,,2026-05-29T10:00:00+08:00,2026-05-29T10:30:00+08:00
