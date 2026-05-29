@@ -148,7 +148,49 @@ crontab -e   # 粘贴上方那行，保存退出
 
 ---
 
-## 7. 下一步任务（优先级排序）
+## 7. 跨智能体状态共享机制
+
+### 核心原则
+
+- 项目状态不能依赖 Claude、Codex 或任何智能体的私有记忆系统。
+- 跨智能体共享状态必须写进项目本身的文件。
+- 任何智能体进入项目执行日报 workflow，必须先读状态文件，再开始执行。
+
+### 两层结构
+
+| 文件 | 用途 | 读取规则 |
+|------|------|---------|
+| `data/pipeline_state.json` | 当前轻量状态，每次进入项目必读 | 全文读取（文件极短） |
+| `data/pipeline_log.csv` | 完整历史流水账 | 按需 grep/tail，**禁止 cat 全文** |
+
+### 强制启动检查顺序
+
+任何智能体进入本项目，必须按顺序先读：
+
+1. `PROJECT_MEMORY.md`
+2. `docs/WORKFLOWS.md`
+3. `data/pipeline_state.json`
+
+然后只按需查询 `data/pipeline_log.csv`。
+
+### 推送飞书前必须检查
+
+```bash
+grep "目标日期" data/pipeline_log.csv
+```
+
+如果该行 `status=done` 且 `feishu_pushed=true`，**严禁重复推送**，需向用户确认后才能继续。
+
+### 状态更新规则
+
+- 每次任务开始前：读 `pipeline_state.json` 确认 `next_action`
+- 每次任务完成后：同时更新 `pipeline_state.json` + 追加 `pipeline_log.csv` 一行
+- `updated_by` 必须填写执行的智能体名称（`claude-code` / `codex` / `human`）
+- 不得在任何状态文件中写入 webhook、token、手机号、营业敏感明细
+
+---
+
+## 8. 下一步任务（优先级排序）
 
 1. **持续积累日报数据**：每天跑 `main.py`，让 CSV 有足够的历史
 2. **确认 crontab 是否已写入**：`crontab -l` 检查
@@ -161,7 +203,7 @@ crontab -e   # 粘贴上方那行，保存退出
 
 ---
 
-## 8. 工作约定
+## 9. 工作约定
 
 - **日报运行**：`python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx`
 - **周报运行**：`python3 weekly_report.py --last-week`

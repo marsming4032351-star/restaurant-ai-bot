@@ -213,3 +213,62 @@ crontab -l
 - `docs/WORKFLOWS.md`
 
 如果要修改功能，先向用户说明方案、影响范围和验证方式，再动代码。不要打印 `.env` 敏感值，不要直接写入 crontab，不要把真实数据加入 git。
+
+---
+
+## 十二、跨智能体状态共享（必读）
+
+### 启动顺序
+
+任何智能体（Claude Code / Codex / 其他）进入本项目执行日报 workflow，必须按顺序先读：
+
+1. `PROJECT_MEMORY.md`
+2. `docs/WORKFLOWS.md`
+3. `data/pipeline_state.json` ← **读这个确认当前任务和 next_action**
+
+### 读取 pipeline_state.json
+
+```bash
+cat data/pipeline_state.json
+```
+
+读取后确认：
+- `current_target_date`：本次应处理的日期
+- `next_action`：本次应执行的动作
+- `last_feishu_pushed`：上一次是否推送成功
+
+### 按需查询 pipeline_log.csv（禁止 cat 全文）
+
+```bash
+# 查某一天状态（推送前必须先执行）
+grep "2026-05-28" data/pipeline_log.csv
+
+# 查最近5条记录
+tail -n 5 data/pipeline_log.csv
+
+# 查所有已推送飞书的记录
+grep ",true," data/pipeline_log.csv
+```
+
+### 推送飞书前强制检查
+
+```bash
+grep "目标日期" data/pipeline_log.csv
+```
+
+如果查询结果中 `status=done` 且 `feishu_pushed=true`，**严禁重复推送**，必须向用户确认。
+
+### 任务完成后必须更新两个文件
+
+1. 更新 `data/pipeline_state.json`（覆盖写，保持文件极短）
+2. 追加一行到 `data/pipeline_log.csv`（只追加，不覆盖）
+3. `updated_by` / `agent` 字段填写实际执行的智能体名称
+
+### next_action 枚举
+
+| 值 | 含义 |
+|----|------|
+| `process_MMDD_preview_only` | 处理指定日期，生成预览，不推飞书 |
+| `process_MMDD_and_push` | 处理指定日期并推飞书 |
+| `idle_all_done` | 当前无待处理任务 |
+| `manual_review_required` | 需要人工介入后再继续 |

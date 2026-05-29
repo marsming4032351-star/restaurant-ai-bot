@@ -42,3 +42,5 @@ test/*.png
 !daily/sample_daily.json
 !data/sample_store_history.csv
 !data/data_schema.json
+!data/pipeline_log.csv
+!data/pipeline_state.json
