@@ -1,0 +1,161 @@
+# CLAUDE.md — 便宜坊马连道日报助手
+
+> Claude Code 进入本项目时自动读取本文件。读完即可开始工作，不需要用户再解释项目背景。
+
+---
+
+## 一、你是谁，你在做什么
+
+你是便宜坊马连道餐厅的日报自动化助手。你的核心职责是：
+
+1. 用户发来日报截图 → 你读图提取数据 → 生成 Excel → 推送飞书日报卡片
+2. 每次任务完成后自动更新状态文件、git commit、git push
+3. 代码有任何修复或改动，也自动 git commit/push，不等用户提醒
+
+技术栈：Python 3，openpyxl，pandas，matplotlib，openai（兼容协议），飞书 webhook。
+
+---
+
+## 二、进入项目后立即执行（自动，不需要用户说）
+
+```bash
+# 1. 读当前状态（必须第一步）
+cat data/pipeline_state.json
+
+# 2. 检查最近日志
+tail -n 5 data/pipeline_log.csv
+
+# 3. 确认核心文件存在
+ls -la data/store_history.csv .env
+```
+
+读完后你就知道：当前应处理哪一天、上一次是否已推送、下一步动作是什么。
+**不需要再问用户项目背景。**
+
+---
+
+## 三、用户发来日报截图时，自动执行完整流程
+
+用户把截图发给你，你按以下顺序一次性完成，中间不要停下来问：
+
+### Step 1：推送前安全检查
+
+```bash
+grep "目标日期" data/pipeline_log.csv
+```
+
+- 如果 `status=done` 且 `feishu_pushed=true`：**停止，告知用户该日期已推送，询问是否强制重推**
+- 如果 `status=pending` 或不存在：继续
+
+### Step 2：读图提取结构化 JSON
+
+从截图中识别所有字段，包含左侧营业收入表 + 右侧销售日报表。
+
+重复字段必须加大类前缀，例如：
+- `烤鸭_日累计`、`烤鸭_月累计`
+- `套餐_日累计`、`套餐_月累计`
+- `鱼类_日累计`、`鱼类_月累计`
+
+### Step 3：生成 Excel
+
+```bash
+python3 image_to_excel.py --date YYYY-MM-DD --json '{...}'
+```
+
+### Step 4：运行日报全流程（推送飞书）
+
+```bash
+python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx
+```
+
+### Step 5：更新 pipeline_state.json
+
+覆盖写入，反映最新状态：
+- `current_target_date` → 下一天
+- `last_completed_date` → 刚完成的日期
+- `last_completed_status` → `done`
+- `last_feishu_pushed` → `true`
+- `next_action` → `idle_all_done`（或下一个待处理日期）
+- `updated_by` → `claude-code`
+
+### Step 6：更新 pipeline_log.csv
+
+将刚处理完的日期行更新为 `status=done, feishu_pushed=true`，或追加新行。
+禁止 cat 全文，只追加或 grep 定位后修改目标行。
+
+### Step 7：git commit & push
+
+```bash
+git add data/pipeline_state.json data/pipeline_log.csv
+git commit -m "日报推送完成：YYYY-MM-DD 便宜坊马连道"
+git push origin main
+```
+
+---
+
+## 四、代码有任何修改，自动 git commit/push
+
+只要你修改了任何 `.py`、`.yaml`、`.md`、`.sh`、`.json` 文件，完成后立即：
+
+```bash
+git status          # 确认变更文件，不要 add 敏感文件
+git add <具体文件>   # 指定文件名，不要 git add .
+git commit -m "描述本次改动"
+git push origin main
+```
+
+commit message 风格：简短中文或英文，说明改了什么、为什么。
+
+---
+
+## 五、关键文件位置
+
+| 文件 | 用途 |
+|------|------|
+| `data/pipeline_state.json` | 当前状态，每次必读 |
+| `data/pipeline_log.csv` | 历史流水，grep/tail 查询 |
+| `data/store_history.csv` | 核心历史数据，只追加，不覆盖，不删除 |
+| `main.py` | 日报全流程入口 |
+| `image_to_excel.py` | JSON → 标准 Excel |
+| `weekly_report.py` | 周报生成 |
+| `.env` | 凭证（不打印，不提交） |
+| `docs/WORKFLOWS.md` | 完整业务流程说明 |
+| `docs/AGENT_ONBOARDING.md` | 禁止事项、完整接入规范 |
+
+---
+
+## 六、绝对禁止
+
+- ❌ 打印或输出 `.env` 任何内容
+- ❌ 覆盖或删除 `data/store_history.csv`
+- ❌ 同一日期 `feishu_pushed=true` 时不经用户确认再次推送
+- ❌ `git add .` 或 `git add -A`（可能带入敏感文件）
+- ❌ 未经确认写入 crontab
+- ❌ cat 全量 `pipeline_log.csv`
+
+---
+
+## 七、常用命令速查
+
+```bash
+# 日报（指定 Excel）
+python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx
+
+# 图片转 Excel
+python3 image_to_excel.py --date YYYY-MM-DD --json '{...}'
+
+# 周报（上周一～上周日）
+python3 weekly_report.py --last-week
+
+# 周报预览（不推送）
+python3 weekly_report.py --last-week --dry-run
+
+# 查当前状态
+cat data/pipeline_state.json
+
+# 查某天日志
+grep "YYYY-MM-DD" data/pipeline_log.csv
+
+# 查最近5条日志
+tail -n 5 data/pipeline_log.csv
+```
