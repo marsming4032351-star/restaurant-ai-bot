@@ -82,10 +82,10 @@
 ### 命令
 
 ```bash
-python3 run_daily_report.py --image input/xxx.png --store 便宜坊马连道 --date 2026-05-29
+python3 run_daily_report.py --image "/Users/ming/Desktop/临时/马连道/xxx.png" --store 便宜坊马连道 --date 2026-05-29
 ```
 
-如果不传 `--image`，脚本会自动使用 `input/` 文件夹中最近修改的一张 `png/jpg/jpeg/webp` 图片：
+如果不传 `--image`，脚本会自动使用 `/Users/ming/Desktop/临时/马连道` 文件夹中最近修改的一张 `png/jpg/jpeg/webp` 图片：
 
 ```bash
 python3 run_daily_report.py --store 便宜坊马连道 --date 2026-05-29

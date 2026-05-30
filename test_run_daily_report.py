@@ -8,6 +8,11 @@ import run_daily_report as R
 
 
 class RunDailyReportTests(unittest.TestCase):
+    def test_default_input_dir_is_maliandao_desktop_folder(self):
+        expected = Path("/Users/ming/Desktop/临时/马连道")
+
+        self.assertEqual(R.INPUT_DIR, expected)
+
     def test_extract_json_from_markdown_block(self):
         text = '结果如下：\n```json\n{"本日收入": 123.45, "来客数": 9}\n```'
 
