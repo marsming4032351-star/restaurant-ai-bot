@@ -14,6 +14,9 @@ GitHub private repo：
 - 历史数据沉淀
 - 周报生成
 - 飞书卡片推送
+- 一键截图日报
+- 文件夹自动监听日报
+- macOS launchd 开机自动监听
 - workflow 文档
 - 智能体接入文档
 
@@ -31,6 +34,61 @@ GitHub private repo：
 最终目标：做成 CaiHub 餐饮经营数据日报 Agent 的雏形，支持多店、自动异常预警、趋势分析。
 
 详细 workflow 见 `docs/WORKFLOWS.md`。
+
+---
+
+## 日常使用方式
+
+当前推荐把日报截图放到项目外部固定输入目录：
+
+```text
+/Users/ming/Restaurant/daily-input/马连道
+```
+
+日常只需要做两件事：
+
+1. 把当天日报截图复制到上面的输入目录。
+2. 确认 `watch_daily_folder.py` 或 launchd 监听服务正在运行。
+
+如果需要手动触发日报，可以执行：
+
+```bash
+cd /Users/ming/Restaurant/restaurant-ai-bot
+python3 run_daily_report.py --store 便宜坊马连道 --date YYYY-MM-DD
+```
+
+如果截图不在默认目录，也可以显式指定：
+
+```bash
+python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道 --date YYYY-MM-DD
+python3 run_daily_report.py --image "/path/to/daily.png" --store 便宜坊马连道 --date YYYY-MM-DD
+```
+
+查看自动监听状态：
+
+```bash
+scripts/status_watcher_launchd.sh
+```
+
+当前仓库已经包含 launchd 安装、状态、卸载脚本。若修改过监听脚本或默认输入目录，建议重新执行：
+
+```bash
+scripts/install_watcher_launchd.sh
+```
+
+---
+
+## 当前自动化流程
+
+1. `watch_daily_folder.py` 监听 `/Users/ming/Restaurant/daily-input/马连道`。
+2. 发现新的 `png/jpg/jpeg/webp` 截图后，等待文件写入稳定。
+3. 调用 `run_daily_report.py --image <截图> --store 便宜坊马连道 --date <当天>`。
+4. `run_daily_report.py` 用视觉模型识别截图，生成结构化 JSON。
+5. `image_to_excel.py` 写出标准 Excel：`data/便宜坊马连道_YYYY-MM-DD.xlsx`。
+6. `main.py` 执行解析、AI 诊断、图表生成、飞书日报卡片推送、历史写入。
+7. 成功后更新 `data/pipeline_state.json` 和 `data/pipeline_log.csv`，并自动提交/推送 pipeline 状态文件。
+
+飞书推送链路统一走 `.env` 中的配置：`FEISHU_WEBHOOK` 用于群机器人卡片；`FEISHU_APP_ID` / `FEISHU_APP_SECRET` 可选，用于上传分析图。不要打印或提交 `.env`。
 
 ---
 

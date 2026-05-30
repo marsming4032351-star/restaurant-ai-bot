@@ -13,7 +13,7 @@
 - 数据沉淀（CSV 历史记录）
 - AI 诊断（日报 + 周报）
 - 自动推送（飞书互动卡片）
-- 定时自动化（cron 周报）
+- 定时自动化（launchd 日报监听 + cron 周报）
 
 详细 workflow 见 `docs/WORKFLOWS.md`。
 
@@ -42,11 +42,16 @@ restaurant-ai-bot/
 ├── history.py            # 历史数据管理：追加/查重/展示 store_history.csv
 ├── weekly_report.py      # 周报生成器：读 CSV → 统计 → AI → 飞书推送
 ├── image_to_excel.py     # 辅助：Claude 读图后的 JSON → 标准 Excel
+├── run_daily_report.py   # 一键日报：截图 → 识别 → Excel → 飞书 → pipeline 状态
+├── watch_daily_folder.py # 监听截图目录，自动触发一键日报
 ├── config.py             # 凭证 & 路径（从 .env 读）
 ├── field_map.yaml        # 字段映射：中文表头 → 标准字段名
 ├── prompts/diagnose.txt  # 日报 AI 诊断 prompt（连锁餐饮 5 步分析法）
 ├── scripts/
-│   └── run_weekly.sh     # cron 执行脚本：每周一 9:00 生成上周周报
+│   ├── install_watcher_launchd.sh   # 安装/重载 macOS 开机监听服务
+│   ├── status_watcher_launchd.sh    # 查看监听服务、进程和日志
+│   ├── uninstall_watcher_launchd.sh # 卸载监听服务
+│   └── run_weekly.sh                # cron 执行脚本：每周一 9:00 生成上周周报
 ├── data/
 │   ├── store_history.csv # ★ 核心历史数据（不要手动删改）
 │   ├── data_schema.json  # 字段定义 + 告警阈值
@@ -54,7 +59,7 @@ restaurant-ai-bot/
 │   └── 便宜坊马连道_YYYY-MM-DD.xlsx  # 日报 Excel（按日期命名）
 ├── output/               # 生成的 4 张分析图 + report JSON（可重新生成）
 ├── logs/                 # 运行日志（不要删除）
-├── raw_images/           # 日报截图原图
+├── raw_images/           # 早期日报截图原图；当前默认输入目录已迁到项目外
 ├── test/                 # 测试图片 0524～0527.png
 ├── .backup_v2/           # v2 关键文件快照（备份勿动）
 ├── .env                  # 本地凭证（不提交 git，不打印内容）
@@ -97,6 +102,9 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] `image_to_excel.py`：Claude 读图 → JSON → 标准 Excel
 - [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态 → git commit/push
 - [x] `watch_daily_folder.py`：监听 `/Users/ming/Restaurant/daily-input/马连道` 新截图并自动触发一键日报
+- [x] 默认日报截图输入目录已迁出 Desktop：`/Users/ming/Restaurant/daily-input/马连道`
+- [x] `run_daily_report.py --input-folder` 和 `watch_daily_folder.py --folder` 保留手动目录覆盖能力
+- [x] `scripts/install_watcher_launchd.sh` 会自动创建截图输入目录和日志目录
 - [x] 每次运行后自动追加数据到 `data/store_history.csv`
 - [x] 历史数据重复检测（同天同店提示 y/n，cron 模式自动跳过）
 
@@ -108,15 +116,48 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 ### 自动化
 - [x] crontab 配置已生成（**待确认是否写入系统，见下方**）
+- [x] launchd 日报监听脚本已具备安装、状态查看、卸载能力
+- [x] 当前机器上 `com.restaurant.daily-watcher` plist 已存在且服务处于 loaded/running
+- [ ] 当前机器上的监听服务日志仍有旧 Desktop 路径报错，需要重新执行 `scripts/install_watcher_launchd.sh` 重载新版脚本
 
-### 数据文件
+### 数据文件与状态
 - [x] `data/data_schema.json`：字段定义 + 告警阈值
 - [x] `data/sample_data.json`：3 天真实测试数据（0524/0525/0526）
-- [x] `data/store_history.csv`：当前有 3 行历史数据（2026-05-24/25/26）
+- [x] `data/pipeline_state.json`：当前目标日期 `2026-05-30`，最后完成日期 `2026-05-29`
+- [x] `data/pipeline_log.csv`：最近成功流水覆盖到 `2026-05-29`
+- [x] `data/store_history.csv`：核心历史数据持续追加，由日报主链路维护
 
 ---
 
 ## 5. 自动化配置状态
+
+### launchd（日报截图文件夹监听）
+
+默认截图输入目录：
+
+```text
+/Users/ming/Restaurant/daily-input/马连道
+```
+
+安装或重载：
+
+```bash
+scripts/install_watcher_launchd.sh
+```
+
+查看状态、进程和最近日志：
+
+```bash
+scripts/status_watcher_launchd.sh
+```
+
+停止并卸载：
+
+```bash
+scripts/uninstall_watcher_launchd.sh
+```
+
+当前状态：`com.restaurant.daily-watcher` 已安装并 loaded/running。因为之前服务曾使用 Desktop 路径，若日志继续出现 `PermissionError: Operation not permitted: '/Users/ming/Desktop/临时/马连道'`，重新执行安装脚本即可让 launchd 重载新版默认目录。
 
 ### crontab（每周一 9:00 生成上周周报）
 
@@ -142,11 +183,11 @@ crontab -e   # 粘贴上方那行，保存退出
 
 | 问题 | 状态 |
 |------|------|
-| 数据来源仍为手动整理（Claude 读图 → JSON → Excel） | 待解决 |
+| 截图来源已自动监听，但仍依赖视觉模型识别截图字段 | 持续优化 |
 | 4 张分析图未发到飞书（需配置 App 凭证） | 待解决 |
 | 0527.png（御炉通明湖）格式完全不同，尚未适配 | 待解决 |
 | 部分字段偶尔为空（回收100元代金券数量等）parser 报 warning | 低优先级 |
-| CSV 历史数据目前只有 3 天，周报分析样本不足 | 持续积累中 |
+| 当前 launchd 日志可能仍有旧 Desktop 权限错误 | 重载安装脚本后观察 |
 
 ---
 
@@ -194,14 +235,14 @@ grep "目标日期" data/pipeline_log.csv
 
 ## 8. 下一步任务（优先级排序）
 
-1. **持续积累日报数据**：每天跑 `main.py`，让 CSV 有足够的历史
-2. **确认 crontab 是否已写入**：`crontab -l` 检查
-3. **标准化输入**：支持从 `daily/` 文件夹批量处理多日截图
-4. **异常规则引擎**：基于 `data_schema.json` 里的阈值，自动判断告警级别
-5. **趋势分析图**：周报加上 7 日收入曲线图
-6. **飞书图片推送**：配置自建 App `im:resource` 权限
-7. **多店支持**：适配御炉通明湖店（不同字段格式）
-8. **日报定时任务**：每天 8:00 cron 自动跑昨日日报
+1. **重载日报监听服务**：执行 `scripts/install_watcher_launchd.sh`，确认日志不再访问 Desktop
+2. **持续积累日报数据**：每天把截图放入 `/Users/ming/Restaurant/daily-input/马连道`
+3. **确认 crontab 是否已写入**：`crontab -l` 检查周报定时任务
+4. **标准化输入**：支持从 `daily/` 文件夹批量处理多日截图
+5. **异常规则引擎**：基于 `data_schema.json` 里的阈值，自动判断告警级别
+6. **趋势分析图**：周报加上 7 日收入曲线图
+7. **飞书图片推送**：配置自建 App `im:resource` 权限
+8. **多店支持**：适配御炉通明湖店（不同字段格式）
 
 ---
 
@@ -212,6 +253,7 @@ grep "目标日期" data/pipeline_log.csv
 - **验证（不推送）**：`python3 weekly_report.py --last-week --dry-run`
 - **读图流程**：截图 → 发给 Claude → Claude 输出 JSON → `image_to_excel.py --date YYYY-MM-DD --json '...'`
 - **一键截图日报**：截图默认放 `/Users/ming/Restaurant/daily-input/马连道`，运行 `python3 run_daily_report.py --store 便宜坊马连道 --date YYYY-MM-DD`
+- **指定输入目录**：`python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道 --date YYYY-MM-DD`
 - **监听截图文件夹**：`nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &`
 - **安装开机自动监听**：`scripts/install_watcher_launchd.sh`
 - **查看/卸载监听服务**：`scripts/status_watcher_launchd.sh` / `scripts/uninstall_watcher_launchd.sh`
