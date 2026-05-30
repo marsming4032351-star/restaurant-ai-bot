@@ -213,6 +213,8 @@ grep "目标日期" data/pipeline_log.csv
 - **读图流程**：截图 → 发给 Claude → Claude 输出 JSON → `image_to_excel.py --date YYYY-MM-DD --json '...'`
 - **一键截图日报**：截图默认放 `/Users/ming/Desktop/临时/马连道`，运行 `python3 run_daily_report.py --store 便宜坊马连道 --date YYYY-MM-DD`
 - **监听截图文件夹**：`nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &`
+- **安装开机自动监听**：`scripts/install_watcher_launchd.sh`
+- **查看/卸载监听服务**：`scripts/status_watcher_launchd.sh` / `scripts/uninstall_watcher_launchd.sh`
 - **重复字段前缀**：`烤鸭_月累计`、`套餐_日累计`、`鱼类_月累计` 等
 - **备份**：`.backup_v2/` 是 v2 版本快照，不要删除
 - **敏感信息**：`.env` 内容不要打印或提交到 git

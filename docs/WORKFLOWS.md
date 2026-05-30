@@ -175,7 +175,47 @@ LLM_VISION_MODEL=
 
 让项目持续监听默认截图目录。当 `/Users/ming/Desktop/临时/马连道` 中出现新的 `png/jpg/jpeg/webp` 图片，或已有图片被更新后，自动等待文件写入稳定，再调用 `run_daily_report.py` 完整日报流程。
 
-### 启动监听
+### macOS 开机自动启动
+
+首次安装 launchd 服务：
+
+```bash
+cd /Users/ming/Restaurant/restaurant-ai-bot
+scripts/install_watcher_launchd.sh
+```
+
+安装脚本会生成：
+
+```text
+~/Library/LaunchAgents/com.restaurant.daily-watcher.plist
+```
+
+plist 配置：
+
+- `ProgramArguments`: `/usr/bin/python3 /Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py`
+- `WorkingDirectory`: `/Users/ming/Restaurant/restaurant-ai-bot`
+- `StandardOutPath`: `/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log`
+- `StandardErrorPath`: `/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log`
+- `KeepAlive=true`
+- `RunAtLoad=true`
+
+安装后会自动 `launchctl unload/load` 或 `bootstrap/kickstart`，让服务立即生效。以后 macOS 登录后会自动监听。
+
+查看服务状态：
+
+```bash
+scripts/status_watcher_launchd.sh
+```
+
+停止并卸载服务：
+
+```bash
+scripts/uninstall_watcher_launchd.sh
+```
+
+卸载脚本只停止服务并删除 plist，不删除任何业务数据、日志、截图、Excel 或日报文件。
+
+### 手动启动监听
 
 前台运行，适合调试：
 
@@ -184,7 +224,7 @@ cd /Users/ming/Restaurant/restaurant-ai-bot
 python3 watch_daily_folder.py
 ```
 
-后台运行，适合日常使用：
+临时后台运行：
 
 ```bash
 cd /Users/ming/Restaurant/restaurant-ai-bot
@@ -212,7 +252,7 @@ python3 watch_daily_folder.py --date 2026-05-30 --once
 Ctrl+C
 ```
 
-后台运行时先查进程，再停止：
+临时后台运行时先查进程，再停止：
 
 ```bash
 pgrep -fl watch_daily_folder.py
@@ -236,6 +276,12 @@ pkill -f watch_daily_folder.py
 
 ```bash
 tail -50 logs/watch_daily_folder.log
+```
+
+或直接运行状态脚本：
+
+```bash
+scripts/status_watcher_launchd.sh
 ```
 
 2. 查看日报 pipeline 流水：

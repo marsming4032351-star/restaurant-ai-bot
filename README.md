@@ -193,14 +193,52 @@ python3 image_to_excel.py --date 2026-05-28 --json '{
 /Users/ming/Desktop/临时/马连道
 ```
 
-启动监听：
+### 推荐：安装为 macOS 开机自动启动服务
+
+首次安装：
+
+```bash
+cd /Users/ming/Restaurant/restaurant-ai-bot
+scripts/install_watcher_launchd.sh
+```
+
+安装后，macOS 登录后会通过 launchd 自动启动监听服务。日常使用时，只需要把截图放入：
+
+```text
+/Users/ming/Desktop/临时/马连道
+```
+
+查看状态：
+
+```bash
+scripts/status_watcher_launchd.sh
+```
+
+停止并卸载自动启动服务：
+
+```bash
+scripts/uninstall_watcher_launchd.sh
+```
+
+卸载脚本只停止服务并删除 plist，不会删除业务数据、日志、截图、Excel 或日报文件。
+
+### 临时前台/后台运行
+
+前台调试：
+
+```bash
+cd /Users/ming/Restaurant/restaurant-ai-bot
+python3 watch_daily_folder.py
+```
+
+临时后台运行：
 
 ```bash
 cd /Users/ming/Restaurant/restaurant-ai-bot
 nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &
 ```
 
-停止监听：
+停止临时后台进程：
 
 ```bash
 pgrep -fl watch_daily_folder.py

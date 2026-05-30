@@ -114,6 +114,25 @@ class RunDailyReportTests(unittest.TestCase):
             self.assertEqual(images[-1], new)
             self.assertNotIn(ignored, images)
 
+    def test_launchd_scripts_define_expected_service_contract(self):
+        install = Path("scripts/install_watcher_launchd.sh").read_text(encoding="utf-8")
+        uninstall = Path("scripts/uninstall_watcher_launchd.sh").read_text(encoding="utf-8")
+        status = Path("scripts/status_watcher_launchd.sh").read_text(encoding="utf-8")
+
+        self.assertIn("com.restaurant.daily-watcher", install)
+        self.assertIn("/usr/bin/python3", install)
+        self.assertIn("/Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py", install)
+        self.assertIn("/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log", install)
+        self.assertIn("<key>KeepAlive</key>", install)
+        self.assertIn("<key>RunAtLoad</key>", install)
+        self.assertRegex(install, r"launchctl (bootstrap|load)")
+        self.assertRegex(install, r"launchctl (kickstart|start)")
+
+        self.assertIn("launchctl", uninstall)
+        self.assertIn("rm -f \"$PLIST_PATH\"", uninstall)
+        self.assertIn("watch_daily_folder.py", status)
+        self.assertIn("tail -50", status)
+
 
 if __name__ == "__main__":
     unittest.main()
