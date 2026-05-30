@@ -190,7 +190,7 @@ python3 image_to_excel.py --date 2026-05-28 --json '{
 默认监听：
 
 ```text
-/Users/ming/Desktop/临时/马连道
+/Users/ming/Restaurant/daily-input/马连道
 ```
 
 ### 推荐：安装为 macOS 开机自动启动服务
@@ -202,10 +202,10 @@ cd /Users/ming/Restaurant/restaurant-ai-bot
 scripts/install_watcher_launchd.sh
 ```
 
-安装后，macOS 登录后会通过 launchd 自动启动监听服务。日常使用时，只需要把截图放入：
+安装脚本会自动创建截图输入目录。安装后，macOS 登录后会通过 launchd 自动启动监听服务。日常使用时，只需要把截图放入：
 
 ```text
-/Users/ming/Desktop/临时/马连道
+/Users/ming/Restaurant/daily-input/马连道
 ```
 
 查看状态：

@@ -1,7 +1,7 @@
 """Watch the daily screenshot folder and run the one-command report flow.
 
 Default folder:
-    /Users/ming/Desktop/临时/马连道
+    /Users/ming/Restaurant/daily-input/马连道
 
 Run:
     python3 watch_daily_folder.py
@@ -152,6 +152,7 @@ def main() -> int:
     args = parse_args()
     folder = Path(args.folder)
     state_path = Path(args.state)
+    folder.mkdir(parents=True, exist_ok=True)
     if args.once:
         report_date = args.date or date.today().isoformat()
         count = process_once(folder, state_path, args.store, report_date)

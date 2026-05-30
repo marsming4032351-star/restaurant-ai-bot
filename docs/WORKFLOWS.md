@@ -82,10 +82,10 @@
 ### 命令
 
 ```bash
-python3 run_daily_report.py --image "/Users/ming/Desktop/临时/马连道/xxx.png" --store 便宜坊马连道 --date 2026-05-29
+python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/xxx.png" --store 便宜坊马连道 --date 2026-05-29
 ```
 
-如果不传 `--image`，脚本会自动使用 `/Users/ming/Desktop/临时/马连道` 文件夹中最近修改的一张 `png/jpg/jpeg/webp` 图片：
+如果不传 `--image`，脚本会自动使用 `/Users/ming/Restaurant/daily-input/马连道` 文件夹中最近修改的一张 `png/jpg/jpeg/webp` 图片：
 
 ```bash
 python3 run_daily_report.py --store 便宜坊马连道 --date 2026-05-29
@@ -173,7 +173,7 @@ LLM_VISION_MODEL=
 
 ### 目标
 
-让项目持续监听默认截图目录。当 `/Users/ming/Desktop/临时/马连道` 中出现新的 `png/jpg/jpeg/webp` 图片，或已有图片被更新后，自动等待文件写入稳定，再调用 `run_daily_report.py` 完整日报流程。
+让项目持续监听默认截图目录。当 `/Users/ming/Restaurant/daily-input/马连道` 中出现新的 `png/jpg/jpeg/webp` 图片，或已有图片被更新后，自动等待文件写入稳定，再调用 `run_daily_report.py` 完整日报流程。
 
 ### macOS 开机自动启动
 
@@ -199,7 +199,7 @@ plist 配置：
 - `KeepAlive=true`
 - `RunAtLoad=true`
 
-安装后会自动 `launchctl unload/load` 或 `bootstrap/kickstart`，让服务立即生效。以后 macOS 登录后会自动监听。
+安装脚本会自动创建 `/Users/ming/Restaurant/daily-input/马连道` 和日志目录，并自动 `launchctl unload/load` 或 `bootstrap/kickstart`，让服务立即生效。以后 macOS 登录后会自动监听。
 
 查看服务状态：
 
@@ -233,7 +233,7 @@ nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &
 
 默认参数：
 
-- 监听目录：`/Users/ming/Desktop/临时/马连道`
+- 监听目录：`/Users/ming/Restaurant/daily-input/马连道`
 - 门店：`便宜坊马连道`
 - 日期：当天日期，格式 `YYYY-MM-DD`
 - 去重状态文件：`data/watch_state.json`
@@ -298,7 +298,7 @@ tail -5 data/pipeline_log.csv
 4. 如果同一天已经成功推送，`run_daily_report.py` 默认会跳过；需要重跑时手动执行：
 
 ```bash
-python3 run_daily_report.py --image "/Users/ming/Desktop/临时/马连道/xxx.png" --store 便宜坊马连道 --date 2026-05-30 --force
+python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/xxx.png" --store 便宜坊马连道 --date 2026-05-30 --force
 ```
 
 ### 关键约束

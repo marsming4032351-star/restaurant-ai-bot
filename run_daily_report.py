@@ -1,7 +1,7 @@
 """One-command daily report workflow.
 
 Example:
-    python3 run_daily_report.py --image "/Users/ming/Desktop/临时/马连道/0529.png" --store 便宜坊马连道 --date 2026-05-29
+    python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/0529.png" --store 便宜坊马连道 --date 2026-05-29
 
 The script intentionally orchestrates existing modules instead of replacing them:
 image -> JSON -> Excel -> main.run() -> pipeline files -> git commit/push.
@@ -26,7 +26,7 @@ import image_to_excel
 
 
 BASE_DIR = Path(__file__).parent
-INPUT_DIR = Path("/Users/ming/Desktop/临时/马连道")
+INPUT_DIR = Path("/Users/ming/Restaurant/daily-input/马连道")
 PIPELINE_STATE = BASE_DIR / "data" / "pipeline_state.json"
 PIPELINE_LOG = BASE_DIR / "data" / "pipeline_log.csv"
 STARTUP_DOCS = [
@@ -68,15 +68,15 @@ def read_startup_context() -> None:
         path.read_text(encoding="utf-8")
 
 
-def latest_input_image() -> Path:
-    if not INPUT_DIR.exists():
-        raise FileNotFoundError(f"未指定 --image，且默认截图文件夹不存在: {INPUT_DIR}")
+def latest_input_image(input_dir: Path = INPUT_DIR) -> Path:
+    if not input_dir.exists():
+        raise FileNotFoundError(f"未指定 --image，且截图文件夹不存在: {input_dir}")
     candidates = [
-        p for p in INPUT_DIR.iterdir()
+        p for p in input_dir.iterdir()
         if p.is_file() and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
     ]
     if not candidates:
-        raise FileNotFoundError(f"未指定 --image，且 {INPUT_DIR} 中没有 png/jpg/jpeg/webp 图片")
+        raise FileNotFoundError(f"未指定 --image，且 {input_dir} 中没有 png/jpg/jpeg/webp 图片")
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
@@ -275,7 +275,8 @@ def _pipeline_row(
 
 def run_daily_report(args: argparse.Namespace) -> int:
     read_startup_context()
-    image_path = Path(args.image) if args.image else latest_input_image()
+    input_folder = Path(getattr(args, "input_folder", INPUT_DIR))
+    image_path = Path(args.image) if args.image else latest_input_image(input_folder)
     if not image_path.exists():
         raise FileNotFoundError(f"图片不存在: {image_path}")
     if is_already_pushed(PIPELINE_LOG, args.date, args.store) and not args.force:
@@ -345,6 +346,7 @@ def run_daily_report(args: argparse.Namespace) -> int:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="一键处理经营日报截图并推送飞书")
     parser.add_argument("--image", help=f"日报截图路径；不传时自动使用 {INPUT_DIR} 中最新图片")
+    parser.add_argument("--input-folder", default=str(INPUT_DIR), help="未传 --image 时读取最新截图的文件夹")
     parser.add_argument("--store", default="便宜坊马连道", help="门店名称")
     parser.add_argument("--store-id", default="MLD", help="内部门店编号，用于 report 文件名")
     parser.add_argument("--date", required=True, help="日报日期 YYYY-MM-DD")

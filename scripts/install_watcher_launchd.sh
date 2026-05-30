@@ -4,12 +4,14 @@ set -euo pipefail
 LABEL="com.restaurant.daily-watcher"
 PROJECT_DIR="/Users/ming/Restaurant/restaurant-ai-bot"
 SCRIPT_PATH="/Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py"
+INPUT_DIR="/Users/ming/Restaurant/daily-input/马连道"
 LOG_DIR="$PROJECT_DIR/logs"
 LOG_PATH="/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log"
 PLIST_PATH="$HOME/Library/LaunchAgents/$LABEL.plist"
 SERVICE_TARGET="gui/$(id -u)/$LABEL"
 
 mkdir -p "$LOG_DIR"
+mkdir -p "$INPUT_DIR"
 mkdir -p "$HOME/Library/LaunchAgents"
 
 cat > "$PLIST_PATH" <<PLIST

@@ -9,10 +9,24 @@ import watch_daily_folder as W
 
 
 class RunDailyReportTests(unittest.TestCase):
-    def test_default_input_dir_is_maliandao_desktop_folder(self):
-        expected = Path("/Users/ming/Desktop/临时/马连道")
+    def test_default_input_dir_is_maliandao_service_friendly_folder(self):
+        expected = Path("/Users/ming/Restaurant/daily-input/马连道")
 
         self.assertEqual(R.INPUT_DIR, expected)
+
+    def test_latest_input_image_allows_explicit_input_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            old = folder / "old.png"
+            new = folder / "new.jpg"
+            ignored = folder / "note.txt"
+            old.write_bytes(b"old")
+            new.write_bytes(b"new")
+            ignored.write_text("ignore", encoding="utf-8")
+
+            image = R.latest_input_image(folder)
+
+            self.assertEqual(image, new)
 
     def test_extract_json_from_markdown_block(self):
         text = '结果如下：\n```json\n{"本日收入": 123.45, "来客数": 9}\n```'
@@ -123,6 +137,8 @@ class RunDailyReportTests(unittest.TestCase):
         self.assertIn("/usr/bin/python3", install)
         self.assertIn("/Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py", install)
         self.assertIn("/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log", install)
+        self.assertIn("/Users/ming/Restaurant/daily-input/马连道", install)
+        self.assertRegex(install, r"mkdir -p .*\$INPUT_DIR")
         self.assertIn("<key>KeepAlive</key>", install)
         self.assertIn("<key>RunAtLoad</key>", install)
         self.assertRegex(install, r"launchctl (bootstrap|load)")
