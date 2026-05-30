@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 import run_daily_report as R
+import watch_daily_folder as W
 
 
 class RunDailyReportTests(unittest.TestCase):
@@ -84,6 +85,34 @@ class RunDailyReportTests(unittest.TestCase):
 
             self.assertTrue(R.store_history_has_row(path, "2026-05-29", "便宜坊马连道"))
             self.assertFalse(R.store_history_has_row(path, "2026-05-30", "便宜坊马连道"))
+
+    def test_watch_state_skips_same_file_signature(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "daily.png"
+            image.write_bytes(b"abc")
+            state_path = Path(tmp) / "watch_state.json"
+
+            signature = W.file_signature(image)
+            self.assertTrue(W.should_process({}, image, signature))
+
+            state = {}
+            W.mark_processed(state, image, signature, "2026-05-30T10:00:00+08:00")
+            self.assertFalse(W.should_process(state, image, signature))
+
+    def test_find_candidate_images_sorted_by_mtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            old = folder / "old.png"
+            new = folder / "new.webp"
+            ignored = folder / "note.txt"
+            old.write_bytes(b"old")
+            new.write_bytes(b"new")
+            ignored.write_text("ignore", encoding="utf-8")
+
+            images = W.find_candidate_images(folder)
+
+            self.assertEqual(images[-1], new)
+            self.assertNotIn(ignored, images)
 
 
 if __name__ == "__main__":

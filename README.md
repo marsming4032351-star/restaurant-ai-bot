@@ -185,6 +185,39 @@ python3 image_to_excel.py --date 2026-05-28 --json '{
 
 ---
 
+## 7.1 后台监听截图文件夹
+
+默认监听：
+
+```text
+/Users/ming/Desktop/临时/马连道
+```
+
+启动监听：
+
+```bash
+cd /Users/ming/Restaurant/restaurant-ai-bot
+nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &
+```
+
+停止监听：
+
+```bash
+pgrep -fl watch_daily_folder.py
+pkill -f watch_daily_folder.py
+```
+
+排查错误：
+
+```bash
+tail -50 logs/watch_daily_folder.log
+tail -5 data/pipeline_log.csv
+```
+
+监听脚本会把已处理图片记录到 `data/watch_state.json`，避免同一张图片重复触发。
+
+---
+
 ## 8. 周报
 
 ### 手动生成上周周报

@@ -169,6 +169,101 @@ LLM_VISION_MODEL=
 
 ---
 
+## Workflow 1.2：后台监听日报截图文件夹
+
+### 目标
+
+让项目持续监听默认截图目录。当 `/Users/ming/Desktop/临时/马连道` 中出现新的 `png/jpg/jpeg/webp` 图片，或已有图片被更新后，自动等待文件写入稳定，再调用 `run_daily_report.py` 完整日报流程。
+
+### 启动监听
+
+前台运行，适合调试：
+
+```bash
+cd /Users/ming/Restaurant/restaurant-ai-bot
+python3 watch_daily_folder.py
+```
+
+后台运行，适合日常使用：
+
+```bash
+cd /Users/ming/Restaurant/restaurant-ai-bot
+nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &
+```
+
+默认参数：
+
+- 监听目录：`/Users/ming/Desktop/临时/马连道`
+- 门店：`便宜坊马连道`
+- 日期：当天日期，格式 `YYYY-MM-DD`
+- 去重状态文件：`data/watch_state.json`
+
+也可以手动指定日期或只扫描一次：
+
+```bash
+python3 watch_daily_folder.py --date 2026-05-30 --once
+```
+
+### 停止监听
+
+前台运行时按：
+
+```bash
+Ctrl+C
+```
+
+后台运行时先查进程，再停止：
+
+```bash
+pgrep -fl watch_daily_folder.py
+pkill -f watch_daily_folder.py
+```
+
+### 去重逻辑
+
+监听脚本会记录每张已处理图片的：
+
+- 文件路径
+- 修改时间
+- 文件大小
+- SHA-256 hash
+
+记录保存在 `data/watch_state.json`。同一张图片如果路径、修改时间、大小和 hash 都没有变化，不会重复触发。图片内容更新后会重新处理。
+
+### 排查错误
+
+1. 查看监听日志：
+
+```bash
+tail -50 logs/watch_daily_folder.log
+```
+
+2. 查看日报 pipeline 流水：
+
+```bash
+tail -5 data/pipeline_log.csv
+```
+
+3. 如果日报流程失败，`run_daily_report.py` 会在 `data/pipeline_log.csv` 中写入：
+   - `status=failed`
+   - `feishu_push_success=false`
+   - `error_message=<错误摘要>`
+
+4. 如果同一天已经成功推送，`run_daily_report.py` 默认会跳过；需要重跑时手动执行：
+
+```bash
+python3 run_daily_report.py --image "/Users/ming/Desktop/临时/马连道/xxx.png" --store 便宜坊马连道 --date 2026-05-30 --force
+```
+
+### 关键约束
+
+- 监听脚本不改 `main.py`、`weekly_report.py` 或日报主链路。
+- 监听脚本只调用 `run_daily_report.py`。
+- 监听脚本不直接提交真实图片、Excel、图表、日志或 `store_history.csv`。
+- `data/watch_state.json` 是本地运行态去重文件，不进入 Git。
+
+---
+
 ## Workflow 2：每周一自动生成上周周报
 
 ### 目标

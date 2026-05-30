@@ -96,6 +96,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] matplotlib 中文字体修复（Arial Unicode MS / STHeiti）
 - [x] `image_to_excel.py`：Claude 读图 → JSON → 标准 Excel
 - [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态 → git commit/push
+- [x] `watch_daily_folder.py`：监听 `/Users/ming/Desktop/临时/马连道` 新截图并自动触发一键日报
 - [x] 每次运行后自动追加数据到 `data/store_history.csv`
 - [x] 历史数据重复检测（同天同店提示 y/n，cron 模式自动跳过）
 
@@ -211,6 +212,7 @@ grep "目标日期" data/pipeline_log.csv
 - **验证（不推送）**：`python3 weekly_report.py --last-week --dry-run`
 - **读图流程**：截图 → 发给 Claude → Claude 输出 JSON → `image_to_excel.py --date YYYY-MM-DD --json '...'`
 - **一键截图日报**：截图默认放 `/Users/ming/Desktop/临时/马连道`，运行 `python3 run_daily_report.py --store 便宜坊马连道 --date YYYY-MM-DD`
+- **监听截图文件夹**：`nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &`
 - **重复字段前缀**：`烤鸭_月累计`、`套餐_日累计`、`鱼类_月累计` 等
 - **备份**：`.backup_v2/` 是 v2 版本快照，不要删除
 - **敏感信息**：`.env` 内容不要打印或提交到 git
