@@ -24,6 +24,7 @@ FEISHU_APP_SECRET = os.getenv("FEISHU_APP_SECRET", "")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")   # anthropic | openai
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-5")
+LLM_VISION_MODEL = os.getenv("LLM_VISION_MODEL", "")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")           # 留空=官方端点;阿里百炼填 dashscope 地址
 
 # ---------- 业务参数 ----------

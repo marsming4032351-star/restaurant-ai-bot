@@ -73,6 +73,102 @@
 
 ---
 
+## Workflow 1.1：一键日报截图处理
+
+### 目标
+
+把“截图 → Excel → 日报分析 → 飞书推送 → 状态更新 → git commit/push”固化成一个稳定入口，避免每次让新智能体重新扫描整个仓库或手工串命令。
+
+### 命令
+
+```bash
+python3 run_daily_report.py --image input/xxx.png --store 便宜坊马连道 --date 2026-05-29
+```
+
+如果不传 `--image`，脚本会自动使用 `input/` 文件夹中最近修改的一张 `png/jpg/jpeg/webp` 图片：
+
+```bash
+python3 run_daily_report.py --store 便宜坊马连道 --date 2026-05-29
+```
+
+### 启动读取
+
+脚本启动时只读取必要上下文，不做全仓库扫描：
+
+1. `PROJECT_MEMORY.md`
+2. `docs/WORKFLOWS.md`
+3. `data/pipeline_state.json`
+
+随后检查 `data/pipeline_log.csv` 中目标日期和门店是否已经 `status=done` 且 `feishu_pushed=true` 或 `feishu_push_success=true`。如已成功推送，默认跳过；确需重跑时使用 `--force`。
+
+脚本还会只读检查 `data/store_history.csv` 是否已有同日同店记录。若已有记录且未使用 `--force`，会停止并写入失败流水，避免进入交互确认卡住自动流程。
+
+### 处理步骤
+
+1. 调用 OpenAI-compatible vision 模型识别截图，输出 `image_to_excel.py` 所需的扁平 JSON。
+2. 复用 `image_to_excel.build_excel()` 生成 `data/便宜坊马连道_YYYY-MM-DD.xlsx`。
+3. 复用 `main.run()` 执行日报主链路：解析、AI 诊断、图表生成、飞书推送、写入 `data/store_history.csv`。
+4. 成功后更新 `data/pipeline_state.json`：
+   - `last_completed_date` 为本次日期。
+   - `current_target_date` 推进到下一天。
+   - `last_feishu_pushed=true`。
+5. 成功后追加 `data/pipeline_log.csv`：
+   - `status=done`
+   - `feishu_pushed=true`
+   - `feishu_push_success=true`
+   - `report_file=output/report_MLD_YYYY-MM-DD.json`
+6. 自动执行指定文件提交和推送：
+
+```bash
+git add data/pipeline_state.json data/pipeline_log.csv
+git commit -m "日报推送完成：YYYY-MM-DD 便宜坊马连道"
+git push origin main
+```
+
+### 失败处理
+
+如果图片识别、Excel 生成、LLM 诊断、飞书推送或主链路任一步失败，脚本会：
+
+- 追加 `data/pipeline_log.csv` 失败记录。
+- 设置 `status=failed`。
+- 设置 `feishu_pushed=false`。
+- 设置 `feishu_push_success=false`。
+- 将错误摘要写入 `error_message`。
+- 尝试提交并推送失败流水：
+
+```bash
+git add data/pipeline_log.csv
+git commit -m "记录日报失败：YYYY-MM-DD 便宜坊马连道"
+git push origin main
+```
+
+失败时不会把该日期标记为 `last_completed_date`。
+
+### 配置要求
+
+图片识别依赖 OpenAI-compatible vision 接口：
+
+```env
+LLM_PROVIDER=openai
+LLM_API_KEY=
+LLM_BASE_URL=
+LLM_MODEL=
+LLM_VISION_MODEL=
+```
+
+`LLM_VISION_MODEL` 可选；如果不填，脚本会使用 `LLM_MODEL`。若当前文本模型不支持图片输入，需要在 `.env` 中配置支持视觉识别的模型。
+
+### 安全边界
+
+- 不打印 `.env`。
+- 不使用 `git add .` 或 `git add -A`。
+- 不提交真实 Excel、图片、日志、parquet、输出图或 `store_history.csv`。
+- 不直接写入 crontab。
+- 不改 `main.py` / `weekly_report.py` 的核心业务逻辑。
+- `data/store_history.csv` 仍由 `main.run()` 写入，保持现有重复保护逻辑。
+
+---
+
 ## Workflow 2：每周一自动生成上周周报
 
 ### 目标
