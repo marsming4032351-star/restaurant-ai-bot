@@ -45,3 +45,4 @@ test/*.png
 !data/pipeline_log.csv
 !data/pipeline_state.json
 data/watch_state.json
+.gstack/
