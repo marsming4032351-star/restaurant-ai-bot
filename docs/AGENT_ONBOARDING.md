@@ -17,7 +17,7 @@
   → image_to_excel.py → 标准 Excel
   → main.py → AI 诊断 → 飞书日报卡片
            → store_history.csv（历史沉淀）
-  → weekly_report.py → 飞书周报卡片（每周一 9:00 自动触发）
+  → weekly_report.py → 飞书周报卡片（周一处理上周日日报成功后自动触发）
 ```
 
 ---
@@ -38,7 +38,7 @@ restaurant-ai-bot/
 ├── field_map.yaml        # 字段映射配置
 ├── prompts/diagnose.txt  # 日报诊断 prompt
 ├── scripts/
-│   └── run_weekly.sh     # cron 执行脚本（每周一 9:00）
+│   └── run_weekly.sh     # 手动/兼容入口：生成上周周报
 ├── data/
 │   ├── store_history.csv # ★ 核心历史数据（只追加，不覆盖）
 │   ├── data_schema.json  # 字段定义 + 告警阈值
@@ -61,7 +61,7 @@ restaurant-ai-bot/
 | `weekly_report.py` | 周报生成 | `python3 weekly_report.py --last-week` |
 | `image_to_excel.py` | JSON → Excel | `python3 image_to_excel.py --date 2026-05-28 --json '{...}'` |
 | `history.py` | 查看历史 | `python3 -c "import history; history.show_recent(7)"` |
-| `scripts/run_weekly.sh` | cron 触发 | 由 crontab 自动调用，不要手动修改路径 |
+| `scripts/run_weekly.sh` | 手动/兼容入口 | 当前主链路不依赖 crontab |
 
 ---
 
@@ -87,7 +87,7 @@ python3 weekly_report.py --last-week
 # 验证统计范围（不推送飞书）
 python3 weekly_report.py --last-week --dry-run
 
-# 自动化：每周一 9:00 由 crontab 触发 scripts/run_weekly.sh
+# 自动化：周一处理上一天（周日）日报并推送成功后触发
 ```
 
 **重要**：`--last-week` 固定统计「上周一～上周日」，不是最近 7 天。
@@ -124,18 +124,15 @@ roast_duck_sales, warning_level, summary, suggestions
 - **不要打印 `.env` 内容**，不要把 webhook 地址写进代码
 - 自定义机器人安全设置关键词为 `日报`，所有消息必须含此词
 - 发图片需要额外配置 `FEISHU_APP_ID` + `FEISHU_APP_SECRET`（当前未配置，图片存本地）
-- 如果推送失败，先检查 `crontab -l` 和 `logs/weekly_report.log`
+- 如果推送失败，先检查日报监听日志和 `logs/weekly_report.log`
 
 ---
 
 ## 八、定时任务说明
 
-**crontab 配置**（每周一 9:00）：
-```
-0 9 * * 1 /Users/ming/Restaurant/restaurant-ai-bot/scripts/run_weekly.sh >> /Users/ming/Restaurant/restaurant-ai-bot/logs/cron_weekly.log 2>&1
-```
+当前主链路不依赖 crontab，也不固定周一 9 点。`scripts/run_weekly.sh` 只作为手动/兼容入口保留。
 
-**检查是否已写入**：
+**只读检查 crontab**：
 ```bash
 crontab -l
 ```
@@ -157,7 +154,7 @@ tail -20 logs/weekly_report.log
 按优先级排序：
 
 1. **持续积累日报数据**：每天手动跑 `main.py`，让 CSV 数据充足后周报分析才有价值
-2. **确认 crontab 状态**：`crontab -l` 查看是否已配置
+2. **确认日报监听状态**：查看 launchd watcher 是否 running，确认日报成功后进入周报检查
 3. **批量导入历史数据**：把 test/0524.png ~ 0526.png 的数据全部写入 CSV
 4. **异常规则引擎**：根据 `data_schema.json` 里的阈值做规则告警，减少对 LLM 的依赖
 5. **周报趋势图**：在周报卡片中加入 7 日收入曲线（matplotlib → 上传图片）

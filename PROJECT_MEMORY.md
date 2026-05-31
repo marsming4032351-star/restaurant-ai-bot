@@ -13,7 +13,7 @@
 - 数据沉淀（CSV 历史记录）
 - AI 诊断（日报 + 周报）
 - 自动推送（飞书互动卡片）
-- 自动化（launchd 日报监听 + 周日真实日报完成后自动触发自然周周报）
+- 自动化（launchd 日报监听 + 周一处理上一天周日日报成功后自动触发上一自然周周报）
 
 详细 workflow 见 `docs/WORKFLOWS.md`。
 
@@ -41,7 +41,7 @@ restaurant-ai-bot/
 ├── feishu_bot.py         # 第4层：飞书互动卡片推送（webhook + 可选 App 上传图片）
 ├── history.py            # 历史数据管理：追加/查重/展示 store_history.csv
 ├── weekly_report.py      # 周报生成器：读 CSV → 统计 → AI → 飞书推送
-├── weekly_auto.py        # 周报自动触发：周日真实日报完成后检查并推送自然周周报
+├── weekly_auto.py        # 周报自动触发：周一处理上一天周日日报成功后检查并推送上一自然周周报
 ├── image_to_excel.py     # 辅助：Claude 读图后的 JSON → 标准 Excel
 ├── run_daily_report.py   # 一键日报：截图 → 识别 → Excel → 飞书 → pipeline 状态
 ├── watch_daily_folder.py # 监听截图目录，自动触发一键日报
@@ -114,9 +114,9 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ### 周报
 - [x] `weekly_report.py` 完成：读 CSV → 统计 → AI 分析 → 飞书互动卡片
 - [x] 支持 `--last-week` 参数：固定统计「上周一～上周日」
-- [x] `weekly_auto.py` 完成：周日真实日报处理完成后自动触发本自然周周报
+- [x] `weekly_auto.py` 完成：周一处理上一天周日日报成功后自动触发上一自然周周报
 - [x] 周报周期固定为自然周（周一到周日），不依赖 crontab，不固定周一 9 点
-- [x] 周六日报完成不触发周报；周日日报先推送日报，再检查并推送周报
+- [x] 周六日报完成不触发周报；周一收到并完成上周日日报后，先推送日报，再检查并推送周报
 - [x] 周中缺一天或多天时周报照常推送，并在卡片中标注缺失日期
 - [x] `data/weekly_state.json` 记录已推送自然周周期，避免重复推送
 - [x] 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准
@@ -174,9 +174,9 @@ scripts/uninstall_watcher_launchd.sh
 当前周报自动化不再固定周一 9 点，也不要求写入 crontab。规则是：
 
 - 周报周期固定为自然周：周一到周日。
-- 当周日真实日报处理完成后，`run_daily_report.py` 会调用 `weekly_auto.check_and_push(...)`。
+- 当周一处理上一天（周日）真实日报并成功推送日报后，`run_daily_report.py` 会调用 `weekly_auto.check_and_push(...)`。
 - 周六日报完成不触发周报。
-- 周日日报完成后，先推送日报，再检查并推送本自然周周报。
+- 周一收到并完成上周日日报后，先推送日报，再检查并推送上一自然周周报。
 - 如果周中缺一天或多天，周报照常发送，但卡片中必须标注缺失日期。
 - 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复。
 - 周报统计只基于 `data/store_history.csv` 中真实存在的日报日期。
@@ -256,7 +256,7 @@ grep "目标日期" data/pipeline_log.csv
 
 ### 本次改动目标
 
-把周报自动化从“依赖周一 9 点 crontab”改成“日报成功后的业务条件触发”：当周日真实日报处理完成后，立即推送该自然周周报。
+把周报自动化从“依赖周一 9 点 crontab”改成“日报成功后的业务条件触发”：当周一处理上一天（周日）真实日报并成功推送日报后，立即推送上一自然周周报。
 
 ### 最终业务规则
 
@@ -269,7 +269,7 @@ grep "目标日期" data/pipeline_log.csv
 - 周报周期固定为自然周：周一到周日。
 - 不使用 crontab，不固定周一 9 点。
 - 周六日报完成不触发周报。
-- 周日日报完成后，先推送日报，再检查并推送本自然周周报。
+- 周一收到并完成上周日日报后，先推送日报，再检查并推送上一自然周周报。
 - 如果周中缺一天或多天，周报照常推送，并标注缺失日期。
 - 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复。
 - 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准。
@@ -288,7 +288,7 @@ grep "目标日期" data/pipeline_log.csv
 - 共 15 个测试 OK。
 - `python3 -m py_compile weekly_auto.py weekly_report.py run_daily_report.py test_weekly_auto.py` 通过。
 - 不需要重启监听服务，因为 `watch_daily_folder.py` 没有改。
-- 下一张周日真实日报图片进入后，会自动触发自然周周报。
+- 下一次周一收到上周日真实日报图片并成功推送日报后，会自动触发上一自然周周报。
 
 ---
 

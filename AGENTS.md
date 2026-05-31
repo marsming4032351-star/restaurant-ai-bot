@@ -35,7 +35,7 @@ ls -la data/store_history.csv .env
 - 周报周期固定为自然周：周一到周日
 - 不使用 crontab，不固定周一 9 点
 - 周六日报完成不触发周报
-- 周日真实日报完成后，先推送日报，再检查并推送本自然周周报
+- 周一处理上一天（周日）真实日报完成后，先推送日报，再检查并推送上一自然周周报
 - 周中缺一天或多天时，周报照常推送，并标注缺失日期
 - 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复
 - 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准
@@ -130,7 +130,7 @@ git push origin main
 | `data/weekly_state.json` | 自然周周报防重复状态 |
 | `main.py` | 日报全流程入口 |
 | `image_to_excel.py` | JSON → 标准 Excel |
-| `weekly_auto.py` | 周日真实日报完成后自动触发自然周周报 |
+| `weekly_auto.py` | 周一在上一天周日日报完成后自动触发上一自然周周报 |
 | `weekly_report.py` | 周报统计、缺失日期提示和飞书推送 |
 | `.env` | 凭证（不打印，不提交） |
 | `docs/WORKFLOWS.md` | 完整流程说明 |

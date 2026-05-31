@@ -1,7 +1,7 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────
-# 便宜坊日报助手 — 每周一 9:00 自动生成上周经营周报
-# crontab: 0 9 * * 1 /Users/ming/Restaurant/restaurant-ai-bot/scripts/run_weekly.sh
+# 便宜坊日报助手 — 手动/兼容入口：生成上周经营周报
+# 当前主链路不依赖 crontab，由周一处理上周日日报成功后自动触发。
 # ─────────────────────────────────────────────────────────
 
 PROJECT_DIR="/Users/ming/Restaurant/restaurant-ai-bot"

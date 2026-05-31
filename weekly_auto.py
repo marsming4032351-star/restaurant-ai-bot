@@ -18,6 +18,11 @@ def now_iso() -> str:
     return datetime.now(tz).replace(microsecond=0).isoformat()
 
 
+def today_in_business_timezone() -> date:
+    tz = timezone(timedelta(hours=8))
+    return datetime.now(tz).date()
+
+
 def load_weekly_state(path: Path = WEEKLY_STATE) -> dict:
     if not path.exists() or path.stat().st_size == 0:
         return {"version": "1.0", "updated_at": "", "pushed_periods": {}}
@@ -62,11 +67,12 @@ def check_and_push(
     store: str,
     completed_date: str,
     *,
+    run_date: date | None = None,
     history_path: Path | None = None,
     state_path: Path = WEEKLY_STATE,
     push_weekly: Callable[[dict], None] | None = None,
 ) -> dict:
-    """Push the natural-week report only after a real Sunday daily report.
+    """Push last week's report after Monday successfully sends Sunday's daily report.
 
     The weekly report is based on existing rows in store_history.csv. Missing
     dates are reported, never invented.
@@ -77,6 +83,25 @@ def check_and_push(
             "triggered": False,
             "reason": "not_sunday",
             "trigger_date": completed_date,
+        }
+
+    actual_run_date = run_date or today_in_business_timezone()
+    if actual_run_date.weekday() != 0:
+        return {
+            "triggered": False,
+            "reason": "run_date_not_monday",
+            "run_date": str(actual_run_date),
+            "trigger_date": completed_date,
+        }
+
+    expected_business_date = actual_run_date - timedelta(days=1)
+    if trigger_date != expected_business_date:
+        return {
+            "triggered": False,
+            "reason": "business_date_not_yesterday",
+            "run_date": str(actual_run_date),
+            "trigger_date": completed_date,
+            "expected_business_date": str(expected_business_date),
         }
 
     start, end = natural_week_range(trigger_date)

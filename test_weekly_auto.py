@@ -60,6 +60,7 @@ class WeeklyAutoTests(unittest.TestCase):
             result = weekly_auto.check_and_push(
                 "便宜坊马连道",
                 "2026-05-30",
+                run_date=date(2026, 6, 1),
                 history_path=history_path,
                 state_path=state_path,
                 push_weekly=calls.append,
@@ -70,7 +71,7 @@ class WeeklyAutoTests(unittest.TestCase):
             self.assertEqual(calls, [])
             self.assertFalse(state_path.exists())
 
-    def test_sunday_daily_completion_pushes_natural_week_report(self):
+    def test_monday_run_after_sunday_daily_completion_pushes_previous_week_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             history_path = Path(tmp) / "store_history.csv"
             state_path = Path(tmp) / "weekly_state.json"
@@ -81,6 +82,7 @@ class WeeklyAutoTests(unittest.TestCase):
             result = weekly_auto.check_and_push(
                 "便宜坊马连道",
                 "2026-05-31",
+                run_date=date(2026, 6, 1),
                 history_path=history_path,
                 state_path=state_path,
                 push_weekly=calls.append,
@@ -96,6 +98,51 @@ class WeeklyAutoTests(unittest.TestCase):
 
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertIn("便宜坊马连道:2026-05-25_2026-05-31", state["pushed_periods"])
+
+    def test_sunday_business_date_does_not_trigger_before_monday(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_path = Path(tmp) / "store_history.csv"
+            state_path = Path(tmp) / "weekly_state.json"
+            days = [str(date(2026, 5, 25) + timedelta(days=i)) for i in range(7)]
+            calls = []
+            write_history(history_path, days)
+
+            result = weekly_auto.check_and_push(
+                "便宜坊马连道",
+                "2026-05-31",
+                run_date=date(2026, 5, 31),
+                history_path=history_path,
+                state_path=state_path,
+                push_weekly=calls.append,
+            )
+
+            self.assertFalse(result["triggered"])
+            self.assertEqual(result["reason"], "run_date_not_monday")
+            self.assertEqual(calls, [])
+            self.assertFalse(state_path.exists())
+
+    def test_monday_run_does_not_trigger_for_sunday_that_is_not_yesterday(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_path = Path(tmp) / "store_history.csv"
+            state_path = Path(tmp) / "weekly_state.json"
+            days = [str(date(2026, 5, 18) + timedelta(days=i)) for i in range(7)]
+            calls = []
+            write_history(history_path, days)
+
+            result = weekly_auto.check_and_push(
+                "便宜坊马连道",
+                "2026-05-24",
+                run_date=date(2026, 6, 1),
+                history_path=history_path,
+                state_path=state_path,
+                push_weekly=calls.append,
+            )
+
+            self.assertFalse(result["triggered"])
+            self.assertEqual(result["reason"], "business_date_not_yesterday")
+            self.assertEqual(result["expected_business_date"], "2026-05-31")
+            self.assertEqual(calls, [])
+            self.assertFalse(state_path.exists())
 
     def test_missing_midweek_day_still_pushes_and_marks_missing_date(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -115,6 +162,7 @@ class WeeklyAutoTests(unittest.TestCase):
             result = weekly_auto.check_and_push(
                 "便宜坊马连道",
                 "2026-05-31",
+                run_date=date(2026, 6, 1),
                 history_path=history_path,
                 state_path=state_path,
                 push_weekly=calls.append,
@@ -167,6 +215,7 @@ class WeeklyAutoTests(unittest.TestCase):
             result = weekly_auto.check_and_push(
                 "便宜坊马连道",
                 "2026-05-31",
+                run_date=date(2026, 6, 1),
                 history_path=history_path,
                 state_path=state_path,
                 push_weekly=calls.append,
@@ -186,6 +235,7 @@ class WeeklyAutoTests(unittest.TestCase):
             result = weekly_auto.check_and_push(
                 "便宜坊马连道",
                 "2026-05-31",
+                run_date=date(2026, 6, 1),
                 history_path=history_path,
                 state_path=state_path,
                 push_weekly=calls.append,

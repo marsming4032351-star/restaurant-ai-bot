@@ -274,6 +274,11 @@ def _pipeline_row(
     }
 
 
+def after_daily_report_sent(store: str, report_date: str) -> dict:
+    """Run post-daily hooks after the Feishu daily report has succeeded."""
+    return weekly_auto.check_and_push(store, report_date)
+
+
 def run_daily_report(args: argparse.Namespace) -> int:
     read_startup_context()
     input_folder = Path(getattr(args, "input_folder", INPUT_DIR))
@@ -314,7 +319,7 @@ def run_daily_report(args: argparse.Namespace) -> int:
         )
         weekly_state_changed = False
         try:
-            weekly_result = weekly_auto.check_and_push(args.store, args.date)
+            weekly_result = after_daily_report_sent(args.store, args.date)
             if weekly_result.get("triggered"):
                 weekly_state_changed = True
                 print(

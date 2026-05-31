@@ -17,7 +17,7 @@ GitHub private repo：
 - 一键截图日报
 - 文件夹自动监听日报
 - macOS launchd 开机自动监听
-- 周日真实日报完成后自动触发自然周周报
+- 周一处理上一天周日日报完成后自动触发上一自然周周报
 - workflow 文档
 - 智能体接入文档
 
@@ -88,7 +88,7 @@ scripts/install_watcher_launchd.sh
 5. `image_to_excel.py` 写出标准 Excel：`data/便宜坊马连道_YYYY-MM-DD.xlsx`。
 6. `main.py` 执行解析、AI 诊断、图表生成、飞书日报卡片推送、历史写入。
 7. 成功后更新 `data/pipeline_state.json` 和 `data/pipeline_log.csv`，并自动提交/推送 pipeline 状态文件。
-8. 如果本次真实日报日期是周日，则自动检查并推送本自然周周报。
+8. 如果当前运行日是周一，且本次真实日报日期是上一天（周日），则自动检查并推送上一自然周周报。
 
 日报日期必须来自真实截图/真实营业数据。不允许为了凑周报或补齐日期而修改日报日期，也不允许用系统当天日期覆盖真实数据日期。
 
@@ -116,7 +116,7 @@ restaurant-ai-bot/
 ├── analyst.py            # 第2层：调 LLM 输出结构化诊断 JSON
 ├── visualizer.py         # 第3层：matplotlib 出 4 张分析图
 ├── feishu_bot.py         # 第4层：构造飞书互动卡片并推送
-├── weekly_auto.py        # 周日真实日报完成后自动触发自然周周报
+├── weekly_auto.py        # 周一处理上一天周日日报后自动触发上一自然周周报
 ├── weekly_report.py      # 周报统计、卡片和推送
 ├── image_to_excel.py     # 辅助：Claude 读图后的 JSON → 标准 Excel
 ├── config.py             # 从 .env 读取凭证和路径
@@ -338,9 +338,9 @@ tail -5 data/pipeline_log.csv
 当前周报不依赖 crontab，也不固定周一 9 点。业务规则是：
 
 - 周报周期固定为自然周：周一到周日。
-- 触发点是周日真实日报处理完成后。
+- 触发点是周一处理上一天（周日）真实日报并成功推送日报之后。
 - 周六日报完成不触发周报。
-- 周日日报完成后，先推送日报，再检查并推送本自然周周报。
+- 周一收到并完成上周日日报后，先推送日报，再检查并推送上一自然周周报。
 - 如果周中缺一天或多天，周报照常推送，但卡片中会标注缺失日期。
 - 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复。
 - 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准。
@@ -387,10 +387,10 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 
 ### 2026-05-31 技术更新记录
 
-- 新增 `weekly_auto.py`：周日真实日报完成后自动触发自然周周报。
+- 新增 `weekly_auto.py`：周一处理上一天周日日报完成后自动触发上一自然周周报。
 - 修改 `run_daily_report.py`：日报完全成功后调用周报条件检查。
 - 修改 `weekly_report.py`：支持缺失日期提示，统计仍基于真实存在的日报数据。
-- 新增 `test_weekly_auto.py`：覆盖周六不触发、周日触发、缺一天仍推送、防重复、无数据不推送。
+- 新增 `test_weekly_auto.py`：覆盖非周一不触发、周一处理非昨天不触发、周一处理上周日触发、缺一天仍推送、防重复、无数据不推送。
 - 新增 `data/weekly_state.json`：记录已推送自然周周期，避免重复推送。
 - 验证：`python3 -m unittest test_run_daily_report.py test_weekly_auto.py` 通过，共 15 个测试 OK。
 - 不需要重启监听服务，因为 `watch_daily_folder.py` 没有改。
@@ -417,7 +417,7 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 - [ ] 趋势分析：基于 `history.parquet` 做 7 日 / 30 日对比图
 - [ ] 图片推送：配置自建 App `im:resource` 权限，发 4 张分析图
 - [ ] 多店支持：适配御炉通明湖等不同格式门店
-- [x] 周报自动触发：周日真实日报完成后自动推送本自然周周报
+- [x] 周报自动触发：周一处理上一天周日日报完成后自动推送上一自然周周报
 - [ ] 日报日期自动从截图标题中识别并传入 `run_daily_report.py`
 
 ---
