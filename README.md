@@ -55,14 +55,16 @@ GitHub private repo：
 
 ```bash
 cd /Users/ming/Restaurant/restaurant-ai-bot
-python3 run_daily_report.py --store 便宜坊马连道 --date YYYY-MM-DD
+python3 run_daily_report.py --store 便宜坊马连道
 ```
+
+`--date` 只作为处理日期参考；日报业务日期必须由图片表头识别得到。
 
 如果截图不在默认目录，也可以显式指定：
 
 ```bash
-python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道 --date YYYY-MM-DD
-python3 run_daily_report.py --image "/path/to/daily.png" --store 便宜坊马连道 --date YYYY-MM-DD
+python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道
+python3 run_daily_report.py --image "/path/to/daily.png" --store 便宜坊马连道
 ```
 
 查看自动监听状态：
@@ -83,14 +85,14 @@ scripts/install_watcher_launchd.sh
 
 1. `watch_daily_folder.py` 监听 `/Users/ming/Restaurant/daily-input/马连道`。
 2. 发现新的 `png/jpg/jpeg/webp` 截图后，等待文件写入稳定。
-3. 调用 `run_daily_report.py --image <截图> --store 便宜坊马连道 --date <真实日报日期>`。
-4. `run_daily_report.py` 用视觉模型识别截图，生成结构化 JSON。
+3. 调用 `run_daily_report.py --image <截图> --store 便宜坊马连道`。
+4. `run_daily_report.py` 用视觉模型识别截图，生成包含图片表头业务日期的结构化 JSON。
 5. `image_to_excel.py` 写出标准 Excel：`data/便宜坊马连道_YYYY-MM-DD.xlsx`。
 6. `main.py` 执行解析、AI 诊断、图表生成、飞书日报卡片推送、历史写入。
 7. 成功后更新 `data/pipeline_state.json` 和 `data/pipeline_log.csv`，并自动提交/推送 pipeline 状态文件。
 8. 如果当前运行日是周一，且本次真实日报日期是上一天（周日），则自动检查并推送上一自然周周报。
 
-日报日期必须来自真实截图/真实营业数据。不允许为了凑周报或补齐日期而修改日报日期，也不允许用系统当天日期覆盖真实数据日期。
+日报业务日期必须来自图片表头/真实营业数据。不允许为了凑周报或补齐日期而修改日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实业务日期。周一只是触发时机，不是日报日期来源。
 
 飞书推送链路统一走 `.env` 中的配置：`FEISHU_WEBHOOK` 用于群机器人卡片；`FEISHU_APP_ID` / `FEISHU_APP_SECRET` 可选，用于上传分析图。不要打印或提交 `.env`。
 

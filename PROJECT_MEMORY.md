@@ -105,7 +105,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态 → git commit/push
 - [x] `watch_daily_folder.py`：监听 `/Users/ming/Restaurant/daily-input/马连道` 新截图并自动触发一键日报
 - [x] 默认日报截图输入目录已迁出 Desktop：`/Users/ming/Restaurant/daily-input/马连道`
-- [x] 日报日期必须来自真实截图/真实营业数据；不允许为了凑周报或补齐日期改写日报日期，也不允许用系统当天日期覆盖真实数据日期
+- [x] 日报业务日期必须来自图片表头/真实营业数据；不允许为了凑周报或补齐日期改写日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期
 - [x] `run_daily_report.py --input-folder` 和 `watch_daily_folder.py --folder` 保留手动目录覆盖能力
 - [x] `scripts/install_watcher_launchd.sh` 会自动创建截图输入目录和日志目录
 - [x] 每次运行后自动追加数据到 `data/store_history.csv`
@@ -263,9 +263,10 @@ grep "目标日期" data/pipeline_log.csv
 - 日报截图日常放入 `/Users/ming/Restaurant/daily-input/马连道`。
 - LaunchAgent 监听服务自动识别图片并执行 `run_daily_report.py`。
 - 日报链路自动生成 Excel、JSON、飞书日报卡片，并追加 `data/store_history.csv`。
-- 日报日期必须来自真实截图/真实营业数据。
+- 日报业务日期必须来自图片表头/真实营业数据。
 - 不允许为了凑周报或补齐日期而修改日报日期。
-- 不允许用系统当天日期覆盖真实数据日期。
+- 不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期。
+- 周一只是周报触发时机，不得覆盖日报业务日期。
 - 周报周期固定为自然周：周一到周日。
 - 不使用 crontab，不固定周一 9 点。
 - 周六日报完成不触发周报。
@@ -309,8 +310,8 @@ grep "目标日期" data/pipeline_log.csv
 - **周报运行**：`python3 weekly_report.py --last-week`
 - **验证（不推送）**：`python3 weekly_report.py --last-week --dry-run`
 - **读图流程**：截图 → 发给 Claude → Claude 输出 JSON → `image_to_excel.py --date YYYY-MM-DD --json '...'`
-- **一键截图日报**：截图默认放 `/Users/ming/Restaurant/daily-input/马连道`，运行 `python3 run_daily_report.py --store 便宜坊马连道 --date YYYY-MM-DD`
-- **指定输入目录**：`python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道 --date YYYY-MM-DD`
+- **一键截图日报**：截图默认放 `/Users/ming/Restaurant/daily-input/马连道`，运行 `python3 run_daily_report.py --store 便宜坊马连道`，业务日期以图片表头为准
+- **指定输入目录**：`python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道`，业务日期以图片表头为准
 - **监听截图文件夹**：`nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &`
 - **安装开机自动监听**：`scripts/install_watcher_launchd.sh`
 - **查看/卸载监听服务**：`scripts/status_watcher_launchd.sh` / `scripts/uninstall_watcher_launchd.sh`

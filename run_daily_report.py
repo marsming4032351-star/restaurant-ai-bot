@@ -1,7 +1,7 @@
 """One-command daily report workflow.
 
 Example:
-    python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/0529.png" --store 便宜坊马连道 --date 2026-05-29
+    python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/0529.png" --store 便宜坊马连道
 
 The script intentionally orchestrates existing modules instead of replacing them:
 image -> JSON -> Excel -> main.run() -> pipeline files -> git commit/push.
@@ -103,22 +103,68 @@ def _expected_keys() -> list[str]:
     return keys
 
 
-def build_extraction_prompt(store: str, report_date: str) -> str:
+BUSINESS_DATE_KEYS = (
+    "业务日期",
+    "日报日期",
+    "表头日期",
+    "日期",
+    "report_date",
+    "business_date",
+)
+
+
+def parse_business_date(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (date, datetime)):
+        return value.date().isoformat() if isinstance(value, datetime) else value.isoformat()
+    text = str(value).strip()
+    if not text:
+        return None
+    patterns = [
+        r"(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*(?:日)?",
+        r"(\d{4})(\d{2})(\d{2})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        year, month, day = (int(match.group(i)) for i in range(1, 4))
+        try:
+            return date(year, month, day).isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def extract_business_date(daily_json: dict) -> str:
+    for key in BUSINESS_DATE_KEYS:
+        parsed = parse_business_date(daily_json.get(key))
+        if parsed:
+            return parsed
+    raise ValueError("图片识别结果缺少表头业务日期，不能用系统日期代替日报日期")
+
+
+def build_extraction_prompt(store: str, processing_date: str | None = None) -> str:
     keys = "\n".join(f"- {key}" for key in _expected_keys())
+    processing_note = f"当前处理日期仅供日志参考：{processing_date}。\n" if processing_date else ""
     return (
-        f"请从这张餐厅经营日报截图中读取 {store} 在 {report_date} 的所有可见数值，"
+        f"请从这张餐厅经营日报截图中读取 {store} 的表头日期和所有可见数值，"
         "输出一个扁平 JSON 对象。只输出 JSON，不要 markdown。\n"
+        f"{processing_note}"
         "要求：\n"
-        "1. key 必须尽量使用下面列表中的字段名。\n"
-        "2. 数值用 number，不要带人民币符号、百分号或逗号。\n"
-        "3. 百分比按截图数字输出，例如 70.28% 输出 70.28。\n"
-        "4. 没看清的字段可以省略，不要编造。\n"
-        "5. 重复的 日累计/月累计 字段必须保留前缀，例如 烤鸭_日累计、套餐_月累计。\n\n"
+        "1. 必须读取图片表头中的日报业务日期，输出 key 为 业务日期，格式 YYYY-MM-DD。\n"
+        "2. 不要使用系统日期、文件日期、处理日期替代表头业务日期。\n"
+        "3. 其他 key 必须尽量使用下面列表中的字段名。\n"
+        "4. 数值用 number，不要带人民币符号、百分号或逗号。\n"
+        "5. 百分比按截图数字输出，例如 70.28% 输出 70.28。\n"
+        "6. 没看清的字段可以省略，不要编造；但表头日期看不清时必须输出空字符串。\n"
+        "7. 重复的 日累计/月累计 字段必须保留前缀，例如 烤鸭_日累计、套餐_月累计。\n\n"
         f"字段列表：\n{keys}"
     )
 
 
-def recognize_image(image_path: Path, store: str, report_date: str) -> dict:
+def recognize_image(image_path: Path, store: str, processing_date: str | None = None) -> dict:
     """Use an OpenAI-compatible vision model to read the report image."""
     if config.LLM_PROVIDER != "openai":
         raise RuntimeError("图片自动识别需要 OpenAI-compatible LLM_PROVIDER=openai")
@@ -141,7 +187,7 @@ def recognize_image(image_path: Path, store: str, report_date: str) -> dict:
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": build_extraction_prompt(store, report_date)},
+                    {"type": "text", "text": build_extraction_prompt(store, processing_date)},
                     {
                         "type": "image_url",
                         "image_url": {"url": f"data:{mime};base64,{image_b64}"},
@@ -285,30 +331,37 @@ def run_daily_report(args: argparse.Namespace) -> int:
     image_path = Path(args.image) if args.image else latest_input_image(input_folder)
     if not image_path.exists():
         raise FileNotFoundError(f"图片不存在: {image_path}")
-    if is_already_pushed(PIPELINE_LOG, args.date, args.store) and not args.force:
-        print(f"[daily] {args.store} · {args.date} 已成功推送，跳过。需要重跑请加 --force")
-        return 0
-    history_file = config.DATA_DIR / "store_history.csv"
-    if store_history_has_row(history_file, args.date, args.store) and not args.force:
-        raise RuntimeError(f"{args.store} · {args.date} 已存在 store_history.csv 记录；重跑请加 --force")
 
     timestamp = now_iso()
     excel_path = None
-    report_path = config.OUTPUT_DIR / f"report_{args.store_id}_{args.date}.json"
+    processing_date = getattr(args, "date", None)
+    business_date = ""
+    report_path = None
     try:
         print(f"[daily] 识别图片: {image_path}")
-        daily_json = recognize_image(image_path, args.store, args.date)
-        excel_path = image_to_excel.build_excel(daily_json, args.date, config.DATA_DIR)
+        daily_json = recognize_image(image_path, args.store, processing_date)
+        business_date = extract_business_date(daily_json)
+        report_path = config.OUTPUT_DIR / f"report_{args.store_id}_{business_date}.json"
+        print(f"[daily] 图片表头业务日期: {business_date}")
+
+        if is_already_pushed(PIPELINE_LOG, business_date, args.store) and not args.force:
+            print(f"[daily] {args.store} · {business_date} 已成功推送，跳过。需要重跑请加 --force")
+            return 0
+        history_file = config.DATA_DIR / "store_history.csv"
+        if store_history_has_row(history_file, business_date, args.store) and not args.force:
+            raise RuntimeError(f"{args.store} · {business_date} 已存在 store_history.csv 记录；重跑请加 --force")
+
+        excel_path = image_to_excel.build_excel(daily_json, business_date, config.DATA_DIR)
         print(f"[daily] 已生成 Excel: {excel_path}")
 
         import main as daily_main
 
         daily_main.run(None, args.store_id, excel_path, args_ns=SimpleNamespace(force=args.force))
-        write_pipeline_state(PIPELINE_STATE, args.store, args.date, timestamp)
+        write_pipeline_state(PIPELINE_STATE, args.store, business_date, timestamp)
         append_pipeline_log(
             PIPELINE_LOG,
             _pipeline_row(
-                report_date=args.date,
+                report_date=business_date,
                 store=args.store,
                 image_path=image_path,
                 excel_path=excel_path,
@@ -319,7 +372,7 @@ def run_daily_report(args: argparse.Namespace) -> int:
         )
         weekly_state_changed = False
         try:
-            weekly_result = after_daily_report_sent(args.store, args.date)
+            weekly_result = after_daily_report_sent(args.store, business_date)
             if weekly_result.get("triggered"):
                 weekly_state_changed = True
                 print(
@@ -335,7 +388,7 @@ def run_daily_report(args: argparse.Namespace) -> int:
             commit_files.append(weekly_auto.WEEKLY_STATE)
         run_git_commit_push(
             commit_files,
-            f"日报推送完成：{args.date} {args.store}",
+            f"日报推送完成：{business_date} {args.store}",
         )
         return 0
     except Exception as exc:
@@ -343,11 +396,11 @@ def run_daily_report(args: argparse.Namespace) -> int:
         append_pipeline_log(
             PIPELINE_LOG,
             _pipeline_row(
-                report_date=args.date,
+                report_date=business_date,
                 store=args.store,
                 image_path=image_path,
                 excel_path=excel_path,
-                report_path=report_path if report_path.exists() else None,
+                report_path=report_path if report_path and report_path.exists() else None,
                 success=False,
                 timestamp=timestamp,
                 error=error,
@@ -358,7 +411,7 @@ def run_daily_report(args: argparse.Namespace) -> int:
         try:
             run_git_commit_push(
                 [PIPELINE_LOG],
-                f"记录日报失败：{args.date} {args.store}",
+                f"记录日报失败：{business_date} {args.store}",
             )
         except Exception as git_exc:
             print(f"[git] 失败日志提交/推送失败: {git_exc}", file=sys.stderr)
@@ -371,7 +424,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input-folder", default=str(INPUT_DIR), help="未传 --image 时读取最新截图的文件夹")
     parser.add_argument("--store", default="便宜坊马连道", help="门店名称")
     parser.add_argument("--store-id", default="MLD", help="内部门店编号，用于 report 文件名")
-    parser.add_argument("--date", required=True, help="日报日期 YYYY-MM-DD")
+    parser.add_argument("--date", required=False, help="处理日期 YYYY-MM-DD；日报业务日期以图片表头识别结果为准")
     parser.add_argument("--force", action="store_true", help="允许重跑已推送日期，并覆盖历史重复记录")
     return parser.parse_args()
 

@@ -88,25 +88,25 @@
 ```
 
 ```bash
-python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/xxx.png" --store 便宜坊马连道 --date 2026-05-29
+python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/xxx.png" --store 便宜坊马连道
 ```
 
 如果不传 `--image`，脚本会自动使用 `/Users/ming/Restaurant/daily-input/马连道` 文件夹中最近修改的一张 `png/jpg/jpeg/webp` 图片：
 
 ```bash
-python3 run_daily_report.py --store 便宜坊马连道 --date 2026-05-29
+python3 run_daily_report.py --store 便宜坊马连道
 ```
 
 如果当天截图放在其他目录，保留手动覆盖能力：
 
 ```bash
-python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道 --date 2026-05-29
+python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道
 ```
 
 如果要指定某一张截图，`--image` 优先级最高：
 
 ```bash
-python3 run_daily_report.py --image "/path/to/daily.png" --store 便宜坊马连道 --date 2026-05-29
+python3 run_daily_report.py --image "/path/to/daily.png" --store 便宜坊马连道
 ```
 
 ### 启动读取
@@ -189,7 +189,7 @@ LLM_VISION_MODEL=
 - 不使用 `git add .` 或 `git add -A`。
 - 不提交真实 Excel、图片、日志、parquet、输出图或 `store_history.csv`。
 - 不直接写入 crontab。
-- 日报日期必须来自真实截图/真实营业数据，不允许用系统当天日期覆盖真实数据日期。
+- 日报业务日期必须来自图片表头/真实营业数据，不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期；周一只是周报触发时机，不得覆盖日报日期。
 - 不允许为了凑周报或补齐周期而修改日报日期。
 - 不改 `main.py` / `weekly_report.py` 的核心业务逻辑。
 - `data/store_history.csv` 仍由 `main.run()` 写入，保持现有重复保护逻辑。
@@ -270,19 +270,19 @@ nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &
 
 - 监听目录：`/Users/ming/Restaurant/daily-input/马连道`
 - 门店：`便宜坊马连道`
-- 日期：应传入真实日报日期，格式 `YYYY-MM-DD`；不得为了触发周报而伪造日期
+- 日期：日报业务日期以图片表头识别结果为准；`--date` 仅作为处理日期参考，不得为了触发周报而伪造或覆盖业务日期
 - 去重状态文件：`data/watch_state.json`
 
 也可以手动指定日期或只扫描一次：
 
 ```bash
-python3 watch_daily_folder.py --date 2026-05-30 --once
+python3 watch_daily_folder.py --once
 ```
 
 也可以指定其他监听目录：
 
 ```bash
-python3 watch_daily_folder.py --folder "/path/to/screenshots" --date 2026-05-30 --once
+python3 watch_daily_folder.py --folder "/path/to/screenshots" --once
 ```
 
 ### 停止监听
@@ -339,7 +339,7 @@ tail -5 data/pipeline_log.csv
 4. 如果同一天已经成功推送，`run_daily_report.py` 默认会跳过；需要重跑时手动执行：
 
 ```bash
-python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/xxx.png" --store 便宜坊马连道 --date 2026-05-30 --force
+python3 run_daily_report.py --image "/Users/ming/Restaurant/daily-input/马连道/xxx.png" --store 便宜坊马连道 --force
 ```
 
 5. 如果日志中仍出现 Desktop 权限错误：

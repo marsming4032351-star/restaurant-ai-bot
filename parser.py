@@ -52,6 +52,32 @@ def scan_cells(xlsx_path: Path) -> list[tuple[int, int, object, str]]:
     return cells
 
 
+def extract_date_from_cells(cells: list[tuple[int, int, object, str]]) -> Optional[date]:
+    """Read the business date from report title/header cells."""
+    patterns = [
+        r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日",
+        r"(\d{4})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{1,2})",
+        r"(\d{4})(\d{2})(\d{2})",
+    ]
+    for _row, _col, value, _sheet in cells:
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if not isinstance(value, str):
+            continue
+        for pattern in patterns:
+            match = re.search(pattern, value)
+            if not match:
+                continue
+            y, mo, d = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            try:
+                return date(y, mo, d)
+            except ValueError:
+                continue
+    return None
+
+
 def find_value_right_of(cells, keyword: str, sheet: str = None) -> Optional[float]:
     """找到 cell 文本完全等于(或包含)keyword 的格子,返回它右边一格的数值。
     去除空格、全角符号、下划线等噪声后匹配。"""
@@ -94,15 +120,20 @@ def load_daily(file_path: Path, report_date: Optional[date] = None) -> dict:
 
     fmap = load_field_map()
 
-    # 1) 日期:优先用参数,其次从文件名抓
-    if report_date is None:
-        report_date = extract_date_from_filename(file_path.name, fmap["meta"]["date_patterns"])
-    if report_date is None:
-        raise ValueError(f"无法从文件名 {file_path.name} 抓出日期,请用 --date 参数指定")
-
-    # 2) 扫所有 cell
+    # 1) 扫所有 cell
     cells = scan_cells(file_path)
     print(f"      扫描到 {len(cells)} 个非空 cell")
+
+    # 2) 日期:优先用报表表头，其次用参数，最后从文件名抓。
+    header_date = extract_date_from_cells(cells)
+    if header_date is not None:
+        if report_date is not None and report_date != header_date:
+            print(f"      ⚠️  忽略传入日期 {report_date}，使用报表表头业务日期 {header_date}")
+        report_date = header_date
+    elif report_date is None:
+        report_date = extract_date_from_filename(file_path.name, fmap["meta"]["date_patterns"])
+    if report_date is None:
+        raise ValueError(f"无法从报表表头或文件名 {file_path.name} 抓出日期,请用 --date 参数指定")
 
     # 3) 按 yaml 抽字段
     def extract_group(group_dict: dict) -> dict:
