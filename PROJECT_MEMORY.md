@@ -13,7 +13,7 @@
 - 数据沉淀（CSV 历史记录）
 - AI 诊断（日报 + 周报）
 - 自动推送（飞书互动卡片）
-- 定时自动化（launchd 日报监听 + cron 周报）
+- 自动化（launchd 日报监听 + 周日真实日报完成后自动触发自然周周报）
 
 详细 workflow 见 `docs/WORKFLOWS.md`。
 
@@ -41,6 +41,7 @@ restaurant-ai-bot/
 ├── feishu_bot.py         # 第4层：飞书互动卡片推送（webhook + 可选 App 上传图片）
 ├── history.py            # 历史数据管理：追加/查重/展示 store_history.csv
 ├── weekly_report.py      # 周报生成器：读 CSV → 统计 → AI → 飞书推送
+├── weekly_auto.py        # 周报自动触发：周日真实日报完成后检查并推送自然周周报
 ├── image_to_excel.py     # 辅助：Claude 读图后的 JSON → 标准 Excel
 ├── run_daily_report.py   # 一键日报：截图 → 识别 → Excel → 飞书 → pipeline 状态
 ├── watch_daily_folder.py # 监听截图目录，自动触发一键日报
@@ -51,9 +52,10 @@ restaurant-ai-bot/
 │   ├── install_watcher_launchd.sh   # 安装/重载 macOS 开机监听服务
 │   ├── status_watcher_launchd.sh    # 查看监听服务、进程和日志
 │   ├── uninstall_watcher_launchd.sh # 卸载监听服务
-│   └── run_weekly.sh                # cron 执行脚本：每周一 9:00 生成上周周报
+│   └── run_weekly.sh                # 手动/兼容脚本：生成上周周报（当前不依赖 crontab）
 ├── data/
 │   ├── store_history.csv # ★ 核心历史数据（不要手动删改）
+│   ├── weekly_state.json # 周报周期防重复状态
 │   ├── data_schema.json  # 字段定义 + 告警阈值
 │   ├── sample_data.json  # 3 天测试数据
 │   └── 便宜坊马连道_YYYY-MM-DD.xlsx  # 日报 Excel（按日期命名）
@@ -103,6 +105,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态 → git commit/push
 - [x] `watch_daily_folder.py`：监听 `/Users/ming/Restaurant/daily-input/马连道` 新截图并自动触发一键日报
 - [x] 默认日报截图输入目录已迁出 Desktop：`/Users/ming/Restaurant/daily-input/马连道`
+- [x] 日报日期必须来自真实截图/真实营业数据；不允许为了凑周报或补齐日期改写日报日期，也不允许用系统当天日期覆盖真实数据日期
 - [x] `run_daily_report.py --input-folder` 和 `watch_daily_folder.py --folder` 保留手动目录覆盖能力
 - [x] `scripts/install_watcher_launchd.sh` 会自动创建截图输入目录和日志目录
 - [x] 每次运行后自动追加数据到 `data/store_history.csv`
@@ -111,21 +114,28 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ### 周报
 - [x] `weekly_report.py` 完成：读 CSV → 统计 → AI 分析 → 飞书互动卡片
 - [x] 支持 `--last-week` 参数：固定统计「上周一～上周日」
+- [x] `weekly_auto.py` 完成：周日真实日报处理完成后自动触发本自然周周报
+- [x] 周报周期固定为自然周（周一到周日），不依赖 crontab，不固定周一 9 点
+- [x] 周六日报完成不触发周报；周日日报先推送日报，再检查并推送周报
+- [x] 周中缺一天或多天时周报照常推送，并在卡片中标注缺失日期
+- [x] `data/weekly_state.json` 记录已推送自然周周期，避免重复推送
+- [x] 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准
 - [x] 支持 `--dry-run`：只打印卡片 JSON，不推送
-- [x] `scripts/run_weekly.sh` 已创建，有可执行权限
+- [x] `scripts/run_weekly.sh` 已创建，有可执行权限（当前作为手动/兼容入口，不作为主自动化依赖）
 
 ### 自动化
-- [x] crontab 配置已生成（**待确认是否写入系统，见下方**）
+- [x] 周报自动化已改为日报成功后的条件触发，不使用 crontab
 - [x] launchd 日报监听脚本已具备安装、状态查看、卸载能力
 - [x] 当前机器上 `com.restaurant.daily-watcher` plist 已存在且服务处于 loaded/running
-- [ ] 当前机器上的监听服务日志仍有旧 Desktop 路径报错，需要重新执行 `scripts/install_watcher_launchd.sh` 重载新版脚本
+- [x] 当前监听服务已重载到 `/Users/ming/Restaurant/daily-input/马连道`；历史日志中可能仍有旧 Desktop 路径残留，但不再新增
 
 ### 数据文件与状态
 - [x] `data/data_schema.json`：字段定义 + 告警阈值
 - [x] `data/sample_data.json`：3 天真实测试数据（0524/0525/0526）
-- [x] `data/pipeline_state.json`：当前目标日期 `2026-05-30`，最后完成日期 `2026-05-29`
-- [x] `data/pipeline_log.csv`：最近成功流水覆盖到 `2026-05-29`
+- [x] `data/pipeline_state.json`：当前目标日期 `2026-05-31`，最后完成日期 `2026-05-30`
+- [x] `data/pipeline_log.csv`：最近成功流水覆盖到 `2026-05-30`
 - [x] `data/store_history.csv`：核心历史数据持续追加，由日报主链路维护
+- [x] `data/weekly_state.json`：自然周周报防重复状态
 
 ---
 
@@ -159,23 +169,19 @@ scripts/uninstall_watcher_launchd.sh
 
 当前状态：`com.restaurant.daily-watcher` 已安装并 loaded/running。因为之前服务曾使用 Desktop 路径，若日志继续出现 `PermissionError: Operation not permitted: '/Users/ming/Desktop/临时/马连道'`，重新执行安装脚本即可让 launchd 重载新版默认目录。
 
-### crontab（每周一 9:00 生成上周周报）
+### 周报自动触发（不依赖 crontab）
 
-```cron
-0 9 * * 1 /Users/ming/Restaurant/restaurant-ai-bot/scripts/run_weekly.sh >> /Users/ming/Restaurant/restaurant-ai-bot/logs/cron_weekly.log 2>&1
-```
+当前周报自动化不再固定周一 9 点，也不要求写入 crontab。规则是：
 
-**⚠️ 当前状态：待确认是否已写入系统。**
+- 周报周期固定为自然周：周一到周日。
+- 当周日真实日报处理完成后，`run_daily_report.py` 会调用 `weekly_auto.check_and_push(...)`。
+- 周六日报完成不触发周报。
+- 周日日报完成后，先推送日报，再检查并推送本自然周周报。
+- 如果周中缺一天或多天，周报照常发送，但卡片中必须标注缺失日期。
+- 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复。
+- 周报统计只基于 `data/store_history.csv` 中真实存在的日报日期。
 
-检查命令：
-```bash
-crontab -l
-```
-
-写入命令（如未写入）：
-```bash
-crontab -e   # 粘贴上方那行，保存退出
-```
+`scripts/run_weekly.sh` 仍保留为手动/兼容入口，但不再作为当前主自动化依赖。
 
 ---
 
@@ -187,7 +193,7 @@ crontab -e   # 粘贴上方那行，保存退出
 | 4 张分析图未发到飞书（需配置 App 凭证） | 待解决 |
 | 0527.png（御炉通明湖）格式完全不同，尚未适配 | 待解决 |
 | 部分字段偶尔为空（回收100元代金券数量等）parser 报 warning | 低优先级 |
-| 当前 launchd 日志可能仍有旧 Desktop 权限错误 | 重载安装脚本后观察 |
+| 当前 launchd 日志中可能仍有旧 Desktop 权限错误历史残留 | 只要日志行数不再增长即可 |
 
 ---
 
@@ -233,20 +239,71 @@ grep "目标日期" data/pipeline_log.csv
 
 ---
 
-## 8. 下一步任务（优先级排序）
+## 8. 发布与文档同步规则
 
-1. **重载日报监听服务**：执行 `scripts/install_watcher_launchd.sh`，确认日志不再访问 Desktop
-2. **持续积累日报数据**：每天把截图放入 `/Users/ming/Restaurant/daily-input/马连道`
-3. **确认 crontab 是否已写入**：`crontab -l` 检查周报定时任务
-4. **标准化输入**：支持从 `daily/` 文件夹批量处理多日截图
-5. **异常规则引擎**：基于 `data_schema.json` 里的阈值，自动判断告警级别
-6. **趋势分析图**：周报加上 7 日收入曲线图
-7. **飞书图片推送**：配置自建 App `im:resource` 权限
-8. **多店支持**：适配御炉通明湖店（不同字段格式）
+以后涉及代码变更并需要 `git push` 后，必须主动询问用户：
+`是否需要更新技术文档并推送到飞书？`
+
+未经用户确认，不得调用 `lark-cli docs +update`。如果用户确认，需要先生成或更新 `/private/tmp/restaurant-ai-bot-feishu-sync.md`，再追加写入飞书文档。不得读取、打印 `.env`、token、webhook、app secret。
+
+如果只是检查文档，不要修改代码，不要 `git commit`，不要 `git push`。后续推荐新增 `scripts/push-and-feishu-doc.sh`，把 `git push` 和飞书同步确认做成固定脚本。
 
 ---
 
-## 9. 工作约定
+## 9. 2026-05-31 更新：日报完成后自动触发自然周周报
+
+本次核心代码已提交并推送：`fb78e65 新增周日报后自动推送自然周周报`。
+
+### 本次改动目标
+
+把周报自动化从“依赖周一 9 点 crontab”改成“日报成功后的业务条件触发”：当周日真实日报处理完成后，立即推送该自然周周报。
+
+### 最终业务规则
+
+- 日报截图日常放入 `/Users/ming/Restaurant/daily-input/马连道`。
+- LaunchAgent 监听服务自动识别图片并执行 `run_daily_report.py`。
+- 日报链路自动生成 Excel、JSON、飞书日报卡片，并追加 `data/store_history.csv`。
+- 日报日期必须来自真实截图/真实营业数据。
+- 不允许为了凑周报或补齐日期而修改日报日期。
+- 不允许用系统当天日期覆盖真实数据日期。
+- 周报周期固定为自然周：周一到周日。
+- 不使用 crontab，不固定周一 9 点。
+- 周六日报完成不触发周报。
+- 周日日报完成后，先推送日报，再检查并推送本自然周周报。
+- 如果周中缺一天或多天，周报照常推送，并标注缺失日期。
+- 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复。
+- 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准。
+
+### 新增/修改文件
+
+- `weekly_auto.py`
+- `weekly_report.py`
+- `run_daily_report.py`
+- `test_weekly_auto.py`
+- `data/weekly_state.json`
+
+### 验证结果
+
+- `python3 -m unittest test_run_daily_report.py test_weekly_auto.py` 通过。
+- 共 15 个测试 OK。
+- `python3 -m py_compile weekly_auto.py weekly_report.py run_daily_report.py test_weekly_auto.py` 通过。
+- 不需要重启监听服务，因为 `watch_daily_folder.py` 没有改。
+- 下一张周日真实日报图片进入后，会自动触发自然周周报。
+
+---
+
+## 10. 下一步任务（优先级排序）
+
+1. **持续积累日报数据**：每天把真实截图放入 `/Users/ming/Restaurant/daily-input/马连道`
+2. **标准化输入**：支持从 `daily/` 文件夹批量处理多日截图
+3. **异常规则引擎**：基于 `data_schema.json` 里的阈值，自动判断告警级别
+4. **趋势分析图**：周报加上 7 日收入曲线图
+5. **飞书图片推送**：配置自建 App `im:resource` 权限
+6. **多店支持**：适配御炉通明湖店（不同字段格式）
+
+---
+
+## 11. 工作约定
 
 - **日报运行**：`python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx`
 - **周报运行**：`python3 weekly_report.py --last-week`

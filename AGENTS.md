@@ -24,6 +24,24 @@ ls -la data/store_history.csv .env
 
 ---
 
+## 日报与周报自动化核心规则
+
+- 每天把真实日报截图放入：`/Users/ming/Restaurant/daily-input/马连道`
+- LaunchAgent 监听服务自动识别图片并执行 `run_daily_report.py`
+- 自动生成日报 Excel / JSON / 飞书卡片
+- 日报日期必须来自真实截图/真实营业数据
+- 不允许为了凑周报或补齐日期而修改日报日期
+- 不允许用系统当天日期覆盖真实数据日期
+- 周报周期固定为自然周：周一到周日
+- 不使用 crontab，不固定周一 9 点
+- 周六日报完成不触发周报
+- 周日真实日报完成后，先推送日报，再检查并推送本自然周周报
+- 周中缺一天或多天时，周报照常推送，并标注缺失日期
+- 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复
+- 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准
+
+---
+
 ## 用户发来日报截图时的完整流程
 
 按以下顺序执行，一次性完成，不中途停下来问：
@@ -109,8 +127,11 @@ git push origin main
 | `data/pipeline_state.json` | 当前状态，每次必读 |
 | `data/pipeline_log.csv` | 历史流水，grep/tail 查询 |
 | `data/store_history.csv` | 核心历史，只追加，不覆盖，不删除 |
+| `data/weekly_state.json` | 自然周周报防重复状态 |
 | `main.py` | 日报全流程入口 |
 | `image_to_excel.py` | JSON → 标准 Excel |
+| `weekly_auto.py` | 周日真实日报完成后自动触发自然周周报 |
+| `weekly_report.py` | 周报统计、缺失日期提示和飞书推送 |
 | `.env` | 凭证（不打印，不提交） |
 | `docs/WORKFLOWS.md` | 完整流程说明 |
 | `docs/AGENT_ONBOARDING.md` | 禁止事项和接入规范 |
@@ -135,6 +156,7 @@ python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx
 python3 image_to_excel.py --date YYYY-MM-DD --json '{...}'
 python3 weekly_report.py --last-week
 python3 weekly_report.py --last-week --dry-run
+python3 -m unittest test_run_daily_report.py test_weekly_auto.py
 cat data/pipeline_state.json
 grep "YYYY-MM-DD" data/pipeline_log.csv
 tail -n 5 data/pipeline_log.csv

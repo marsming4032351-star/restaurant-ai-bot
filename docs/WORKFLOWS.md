@@ -143,6 +143,13 @@ git commit -m "日报推送完成：YYYY-MM-DD 便宜坊马连道"
 git push origin main
 ```
 
+7. 如果本次日报真实日期是周日，自动触发自然周周报条件检查：
+   - 周报周期固定为周一到周日。
+   - 通过 `weekly_auto.py` 读取 `data/store_history.csv` 中真实存在的日报日期。
+   - 如果本周有真实数据，则推送周报。
+   - 如果周中缺一天或多天，周报照常推送，并在卡片中标注缺失日期。
+   - 如果 `data/weekly_state.json` 已记录该自然周周期，则跳过避免重复。
+
 ### 失败处理
 
 如果图片识别、Excel 生成、LLM 诊断、飞书推送或主链路任一步失败，脚本会：
@@ -182,6 +189,8 @@ LLM_VISION_MODEL=
 - 不使用 `git add .` 或 `git add -A`。
 - 不提交真实 Excel、图片、日志、parquet、输出图或 `store_history.csv`。
 - 不直接写入 crontab。
+- 日报日期必须来自真实截图/真实营业数据，不允许用系统当天日期覆盖真实数据日期。
+- 不允许为了凑周报或补齐周期而修改日报日期。
 - 不改 `main.py` / `weekly_report.py` 的核心业务逻辑。
 - `data/store_history.csv` 仍由 `main.run()` 写入，保持现有重复保护逻辑。
 
@@ -261,7 +270,7 @@ nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &
 
 - 监听目录：`/Users/ming/Restaurant/daily-input/马连道`
 - 门店：`便宜坊马连道`
-- 日期：当天日期，格式 `YYYY-MM-DD`
+- 日期：应传入真实日报日期，格式 `YYYY-MM-DD`；不得为了触发周报而伪造日期
 - 去重状态文件：`data/watch_state.json`
 
 也可以手动指定日期或只扫描一次：
@@ -351,27 +360,38 @@ scripts/status_watcher_launchd.sh
 
 ---
 
-## Workflow 2：每周一自动生成上周周报
+## Workflow 2：日报完成后自动触发自然周周报
 
 ### 目标
 
-每周一自动统计上一完整自然周的经营数据，并推送飞书周报卡片。
+当周日真实日期的日报处理完成后，自动统计该自然周经营数据，并推送飞书周报卡片。该流程不依赖 crontab，也不固定周一 9 点。
 
 ### 输入
 
 - `data/store_history.csv`
+- `data/weekly_state.json`
+- 本次日报真实日期
 
 ### 处理
 
-1. 确定统计范围。
-   - 使用 `weekly_report.py --last-week`。
-   - 固定统计上周一到上周日，不等同于最近 7 天。
+1. 判断是否触发。
+   - 每次日报处理成功后，读取本次日报真实日期。
+   - 如果不是周日，只记录日志，不触发周报。
+   - 如果是周日，计算该日期所在自然周：周一到周日。
+   - 周六日报完成不触发周报。
 
-2. 读取历史数据。
+2. 防重复。
+   - 使用 `data/weekly_state.json` 记录已推送周期。
+   - 周期 key 格式为 `{store_name}:{start_date}_{end_date}`。
+   - 同一个自然周周期只推送一次。
+
+3. 读取历史数据。
    - 从 `store_history.csv` 中筛选指定门店和日期范围。
-   - 若范围内没有数据，停止并提示先积累日报。
+   - 周报统计必须基于真实存在的日报日期。
+   - 若范围内完全没有真实数据，停止并返回 `no_data`。
+   - 若周中缺一天或多天，不补造数据，继续生成周报，并标注缺失日期。
 
-3. 计算 KPI。
+4. 计算 KPI。
    - 本周总收入。
    - 日均收入。
    - 总来客数。
@@ -380,31 +400,49 @@ scripts/status_watcher_launchd.sh
    - 平均折扣率。
    - 烤鸭周销量和日均销量。
 
-4. 识别异常。
+5. 识别异常。
    - 统计健康、警示、异常天数。
    - 标记折扣率高于阈值的日期。
    - 根据历史日报中的 warning_level 汇总周度风险。
 
-5. 生成经营建议。
+6. 生成经营建议。
    - 调用 LLM 生成本周主要问题、下周建议、趋势总结和重点关注指标。
 
-6. 推送飞书周报卡片。
-   - 手动运行：`python3 weekly_report.py --last-week`。
+7. 推送飞书周报卡片。
+   - 自动入口：`run_daily_report.py` 成功后调用 `weekly_auto.check_and_push(...)`。
+   - 手动运行：`python3 weekly_report.py --last-week` 或 `python3 weekly_report.py --start YYYY-MM-DD --end YYYY-MM-DD`。
    - 验证不推送：`python3 weekly_report.py --last-week --dry-run`。
-   - cron 触发脚本：`scripts/run_weekly.sh`。
+
+8. 记录周报状态。
+   - 推送成功后写入 `data/weekly_state.json`。
+   - 记录门店、周期、触发日期、推送时间、实际数据天数和缺失日期。
 
 ### 输出
 
 - 飞书周报互动卡片。
-- `logs/weekly_report.log` 运行日志。
-- cron 场景下还有 `logs/cron_weekly.log` 标准输出和错误输出。
+- 周报卡片中的缺失日期提示，例如：`本周缺失数据：2026-05-28`。
+- `data/weekly_state.json` 中新增已推送周期记录。
 
 ### 关键约束
 
-- `--last-week` 是上一完整自然周。
+- 周报周期固定为自然周：周一到周日。
+- 周报触发点是周日真实日报处理完成后。
+- 不使用 crontab，不固定周一 9 点。
+- 周六日报完成不触发周报。
+- 周日日报完成后，先推送日报，再检查并推送周报。
 - `--dry-run` 不推送飞书，但仍可能调用 LLM。
 - 未经确认不写入 crontab。
-- 周报质量依赖 `store_history.csv` 的日期覆盖完整度。
+- 日期缺失要如实显示，不补造数据。
+- 周报统计以 `store_history.csv` 中真实存在的日报日期为准。
+
+### 2026-05-31 实现记录
+
+- 新增 `weekly_auto.py`。
+- 修改 `run_daily_report.py`：日报完全成功后触发周报条件检查。
+- 修改 `weekly_report.py`：支持缺失日期提示。
+- 新增 `test_weekly_auto.py`。
+- 新增 `data/weekly_state.json`。
+- 验证命令：`python3 -m unittest test_run_daily_report.py test_weekly_auto.py`，共 15 个测试 OK。
 
 ---
 
@@ -482,6 +520,17 @@ scripts/status_watcher_launchd.sh
 - 不写 crontab。
 - 不打印敏感内容。
 - 不覆盖或删除历史数据。
+
+---
+
+## 发布与文档同步规则
+
+以后涉及代码变更并需要 `git push` 后，必须主动询问用户：
+`是否需要更新技术文档并推送到飞书？`
+
+未经用户确认，不得调用 `lark-cli docs +update`。如果用户确认，需要先生成或更新 `/private/tmp/restaurant-ai-bot-feishu-sync.md`，再追加写入飞书文档。不得读取、打印 `.env`、token、webhook、app secret。
+
+如果只是检查文档，不要修改代码，不要 `git commit`，不要 `git push`。后续推荐新增 `scripts/push-and-feishu-doc.sh`，把 `git push` 和飞书同步确认做成固定脚本。
 
 ---
 

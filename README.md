@@ -17,6 +17,7 @@ GitHub private repo：
 - 一键截图日报
 - 文件夹自动监听日报
 - macOS launchd 开机自动监听
+- 周日真实日报完成后自动触发自然周周报
 - workflow 文档
 - 智能体接入文档
 
@@ -82,13 +83,27 @@ scripts/install_watcher_launchd.sh
 
 1. `watch_daily_folder.py` 监听 `/Users/ming/Restaurant/daily-input/马连道`。
 2. 发现新的 `png/jpg/jpeg/webp` 截图后，等待文件写入稳定。
-3. 调用 `run_daily_report.py --image <截图> --store 便宜坊马连道 --date <当天>`。
+3. 调用 `run_daily_report.py --image <截图> --store 便宜坊马连道 --date <真实日报日期>`。
 4. `run_daily_report.py` 用视觉模型识别截图，生成结构化 JSON。
 5. `image_to_excel.py` 写出标准 Excel：`data/便宜坊马连道_YYYY-MM-DD.xlsx`。
 6. `main.py` 执行解析、AI 诊断、图表生成、飞书日报卡片推送、历史写入。
 7. 成功后更新 `data/pipeline_state.json` 和 `data/pipeline_log.csv`，并自动提交/推送 pipeline 状态文件。
+8. 如果本次真实日报日期是周日，则自动检查并推送本自然周周报。
+
+日报日期必须来自真实截图/真实营业数据。不允许为了凑周报或补齐日期而修改日报日期，也不允许用系统当天日期覆盖真实数据日期。
 
 飞书推送链路统一走 `.env` 中的配置：`FEISHU_WEBHOOK` 用于群机器人卡片；`FEISHU_APP_ID` / `FEISHU_APP_SECRET` 可选，用于上传分析图。不要打印或提交 `.env`。
+
+---
+
+## 发布与文档同步规则
+
+以后涉及代码变更并需要 `git push` 后，必须主动询问用户：
+`是否需要更新技术文档并推送到飞书？`
+
+未经用户确认，不得调用 `lark-cli docs +update`。如果用户确认，需要先生成或更新 `/private/tmp/restaurant-ai-bot-feishu-sync.md`，再追加写入飞书文档。不得读取、打印 `.env`、token、webhook、app secret。
+
+如果只是检查文档，不要修改代码，不要 `git commit`，不要 `git push`。后续推荐新增 `scripts/push-and-feishu-doc.sh`，把 `git push` 和飞书同步确认做成固定脚本。
 
 ---
 
@@ -101,6 +116,8 @@ restaurant-ai-bot/
 ├── analyst.py            # 第2层：调 LLM 输出结构化诊断 JSON
 ├── visualizer.py         # 第3层：matplotlib 出 4 张分析图
 ├── feishu_bot.py         # 第4层：构造飞书互动卡片并推送
+├── weekly_auto.py        # 周日真实日报完成后自动触发自然周周报
+├── weekly_report.py      # 周报统计、卡片和推送
 ├── image_to_excel.py     # 辅助：Claude 读图后的 JSON → 标准 Excel
 ├── config.py             # 从 .env 读取凭证和路径
 ├── field_map.yaml        # 中文字段名 → 标准字段名映射表
@@ -316,7 +333,19 @@ tail -5 data/pipeline_log.csv
 
 ## 8. 周报
 
-### 手动生成上周周报
+### 自动触发自然周周报
+
+当前周报不依赖 crontab，也不固定周一 9 点。业务规则是：
+
+- 周报周期固定为自然周：周一到周日。
+- 触发点是周日真实日报处理完成后。
+- 周六日报完成不触发周报。
+- 周日日报完成后，先推送日报，再检查并推送本自然周周报。
+- 如果周中缺一天或多天，周报照常推送，但卡片中会标注缺失日期。
+- 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复。
+- 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准。
+
+### 手动生成周报
 
 ```bash
 # 标准用法：自动计算上周一～上周日
@@ -332,37 +361,12 @@ python3 weekly_report.py --start 2026-05-20 --end 2026-05-26
 python3 weekly_report.py --days 14
 ```
 
-### 每周一自动运行（crontab）
-
-**第一步：确认脚本可执行**
-
-```bash
-ls -la scripts/run_weekly.sh   # 应有 -rwxr-xr-x
-```
-
-**第二步：将以下配置写入 crontab**
-
-```
-0 9 * * 1 /Users/ming/Restaurant/restaurant-ai-bot/scripts/run_weekly.sh >> /Users/ming/Restaurant/restaurant-ai-bot/logs/cron_weekly.log 2>&1
-```
-
-编辑 crontab：
-```bash
-crontab -e
-# 粘贴上面那行，保存退出
-```
-
-确认已写入：
-```bash
-crontab -l
-```
-
 ### 日志文件位置
 
 | 日志 | 路径 | 内容 |
 |------|------|------|
 | 周报运行日志 | `logs/weekly_report.log` | 每次运行的详细输出 |
-| cron 系统日志 | `logs/cron_weekly.log` | cron 触发时的 stdout/stderr |
+| 日报监听日志 | `logs/watch_daily_folder.log` | 自动日报与周报触发链路的 stdout/stderr |
 
 ### 如何确认推送成功
 
@@ -381,6 +385,16 @@ tail -20 logs/weekly_report.log
 python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 ```
 
+### 2026-05-31 技术更新记录
+
+- 新增 `weekly_auto.py`：周日真实日报完成后自动触发自然周周报。
+- 修改 `run_daily_report.py`：日报完全成功后调用周报条件检查。
+- 修改 `weekly_report.py`：支持缺失日期提示，统计仍基于真实存在的日报数据。
+- 新增 `test_weekly_auto.py`：覆盖周六不触发、周日触发、缺一天仍推送、防重复、无数据不推送。
+- 新增 `data/weekly_state.json`：记录已推送自然周周期，避免重复推送。
+- 验证：`python3 -m unittest test_run_daily_report.py test_weekly_auto.py` 通过，共 15 个测试 OK。
+- 不需要重启监听服务，因为 `watch_daily_folder.py` 没有改。
+
 ---
 
 ## 9. 排障
@@ -395,7 +409,7 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 
 ---
 
-## 9. 后续开发计划
+## 10. 后续开发计划
 
 - [ ] 标准化输入：支持 `daily/` 文件夹批量处理多日图片
 - [ ] 建立 `data_schema.json`：定义字段结构、类型、异常阈值
@@ -403,12 +417,12 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 - [ ] 趋势分析：基于 `history.parquet` 做 7 日 / 30 日对比图
 - [ ] 图片推送：配置自建 App `im:resource` 权限，发 4 张分析图
 - [ ] 多店支持：适配御炉通明湖等不同格式门店
-- [x] 周报定时任务：每周一 9:00 cron 自动生成上周周报（`scripts/run_weekly.sh`）
-- [ ] 日报定时任务：每天 8:00 cron 自动跑昨日日报
+- [x] 周报自动触发：周日真实日报完成后自动推送本自然周周报
+- [ ] 日报日期自动从截图标题中识别并传入 `run_daily_report.py`
 
 ---
 
-## 10. 智能体接入说明
+## 11. 智能体接入说明
 
 > 本章面向 Claude / Codex / 其他 AI 智能体。人类开发者可跳过。
 
@@ -422,8 +436,8 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
    ```bash
    ls -la data/store_history.csv   # 核心历史数据必须存在
    ls -la .env                      # 凭证文件必须存在（不要打印内容）
-   python3 weekly_report.py --last-week --dry-run   # 验证链路是否跑通
-   crontab -l                       # 查看定时任务状态
+   python3 weekly_report.py --last-week --dry-run   # 验证周报链路
+   scripts/status_watcher_launchd.sh                # 查看日报监听服务
    ```
 
 3. **不要一上来就重写项目**
@@ -437,7 +451,7 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 
 ### 修改自动化任务前必须确认
 
-如需修改或新增 crontab 定时任务，**必须先把方案输出给用户确认**，不要直接执行 `crontab -e`。
+当前周报自动化不依赖 crontab。如需修改或新增 crontab 定时任务，**必须先把方案输出给用户确认**，不要直接执行 `crontab -e`。
 
 ### 周期参数说明
 
