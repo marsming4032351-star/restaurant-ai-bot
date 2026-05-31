@@ -23,6 +23,7 @@ from types import SimpleNamespace
 
 import config
 import image_to_excel
+import weekly_auto
 
 
 BASE_DIR = Path(__file__).parent
@@ -311,8 +312,24 @@ def run_daily_report(args: argparse.Namespace) -> int:
                 timestamp=timestamp,
             ),
         )
+        weekly_state_changed = False
+        try:
+            weekly_result = weekly_auto.check_and_push(args.store, args.date)
+            if weekly_result.get("triggered"):
+                weekly_state_changed = True
+                print(
+                    "[weekly-auto] 已推送周报: "
+                    f"{weekly_result.get('start_date')}～{weekly_result.get('end_date')}"
+                )
+            else:
+                print(f"[weekly-auto] 跳过: {weekly_result.get('reason')}")
+        except Exception as weekly_exc:
+            print(f"[weekly-auto] 周报检查/推送失败: {type(weekly_exc).__name__}: {weekly_exc}", file=sys.stderr)
+        commit_files = [PIPELINE_STATE, PIPELINE_LOG]
+        if weekly_state_changed and weekly_auto.WEEKLY_STATE.exists():
+            commit_files.append(weekly_auto.WEEKLY_STATE)
         run_git_commit_push(
-            [PIPELINE_STATE, PIPELINE_LOG],
+            commit_files,
             f"日报推送完成：{args.date} {args.store}",
         )
         return 0

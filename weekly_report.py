@@ -236,9 +236,11 @@ def build_card(stats: dict, analysis: dict) -> dict:
     store   = stats["store_name"]
     w_num   = stats["week_num"]
     year    = stats["year"]
-    s_date  = stats["start_date"]
-    e_date  = stats["end_date"]
+    s_date  = stats.get("period_start_date", stats["start_date"])
+    e_date  = stats.get("period_end_date", stats["end_date"])
     n_days  = stats["n_days"]
+    expected_days = stats.get("expected_days", n_days)
+    missing_dates = stats.get("missing_dates", [])
 
     title = f"{store} · {year}年第{w_num}周经营周报"
 
@@ -352,7 +354,11 @@ def build_card(stats: dict, analysis: dict) -> dict:
                 f"🟡警示{wc.get('警示',0)}天　"
                 f"🔴异常{wc.get('异常',0)}天")
     focus = analysis.get("focus_metric", "")
-    note_parts = [f"数据范围：{s_date} ～ {e_date}（{n_days}天）　{warn_str}"]
+    note_parts = [f"数据范围：{s_date} ～ {e_date}（已有{n_days}/{expected_days}天）　{warn_str}"]
+    if missing_dates:
+        note_parts.append(f"本周缺失数据：{'、'.join(missing_dates)}")
+    else:
+        note_parts.append("本周数据完整")
     if focus:
         note_parts.append(f"🔎 下周重点指标：{focus}")
     elems.append({
@@ -442,6 +448,14 @@ def main():
 
     # 2. 统计
     stats = calc_stats(rows)
+    expected = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    found = {r["_date"] for r in rows}
+    stats["period_start_date"] = str(start)
+    stats["period_end_date"] = str(end)
+    stats["expected_days"] = len(expected)
+    stats["missing_dates"] = [str(d) for d in expected if d not in found]
+    if stats["missing_dates"]:
+        print(f"[weekly] 本周缺失数据: {', '.join(stats['missing_dates'])}")
     print(f"[weekly] 本周总收入: ¥{stats['total_revenue']:,.2f}　"
           f"日均: ¥{stats['daily_avg_revenue']:,.2f}　"
           f"烤鸭: {stats['duck_total_week']}只")
