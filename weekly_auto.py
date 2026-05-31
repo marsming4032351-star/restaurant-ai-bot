@@ -58,6 +58,7 @@ def _default_push_weekly(payload: dict) -> None:
     stats["period_end_date"] = payload["end_date"]
     stats["expected_days"] = 7
     stats["missing_dates"] = payload["missing_dates"]
+    stats["date_check_status"] = payload["date_check_status"]
     analysis = weekly_report.analyze(stats)
     card = weekly_report.build_card(stats, analysis)
     weekly_report.push(card)
@@ -71,6 +72,7 @@ def check_and_push(
     history_path: Path | None = None,
     state_path: Path = WEEKLY_STATE,
     push_weekly: Callable[[dict], None] | None = None,
+    strict_weekly_date_check: bool | None = None,
 ) -> dict:
     """Push last week's report after Monday successfully sends Sunday's daily report.
 
@@ -128,6 +130,7 @@ def check_and_push(
     expected = expected_dates(start, end)
     found = {row["_date"] for row in rows}
     missing = [str(day) for day in expected if day not in found]
+    strict = config.STRICT_WEEKLY_DATE_CHECK if strict_weekly_date_check is None else strict_weekly_date_check
     if not rows:
         return {
             "triggered": False,
@@ -137,6 +140,18 @@ def check_and_push(
             "end_date": str(end),
             "trigger_date": completed_date,
             "missing_dates": missing,
+            "date_check_status": "missing_all_dates",
+        }
+    if missing and strict:
+        return {
+            "triggered": False,
+            "reason": "missing_dates_strict",
+            "period_key": key,
+            "start_date": str(start),
+            "end_date": str(end),
+            "trigger_date": completed_date,
+            "missing_dates": missing,
+            "date_check_status": "missing_dates_blocked",
         }
 
     payload = {
@@ -146,6 +161,7 @@ def check_and_push(
         "trigger_date": completed_date,
         "rows": rows,
         "missing_dates": missing,
+        "date_check_status": "missing_dates_allowed" if missing else "complete",
     }
     (push_weekly or _default_push_weekly)(payload)
 
@@ -159,6 +175,7 @@ def check_and_push(
         "pushed_at": pushed_at,
         "days_found": len(rows),
         "missing_dates": missing,
+        "date_check_status": payload["date_check_status"],
         "source": "store_history.csv",
         "status": "done",
     }
@@ -172,4 +189,5 @@ def check_and_push(
         "trigger_date": completed_date,
         "days_found": len(rows),
         "missing_dates": missing,
+        "date_check_status": payload["date_check_status"],
     }

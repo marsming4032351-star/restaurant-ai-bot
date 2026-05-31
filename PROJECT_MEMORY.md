@@ -105,7 +105,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态 → git commit/push
 - [x] `watch_daily_folder.py`：监听 `/Users/ming/Restaurant/daily-input/马连道` 新截图并自动触发一键日报
 - [x] 默认日报截图输入目录已迁出 Desktop：`/Users/ming/Restaurant/daily-input/马连道`
-- [x] 日报业务日期必须来自图片表头/真实营业数据；不允许为了凑周报或补齐日期改写日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期
+- [x] 日报业务日期必须来自图片表头/真实营业数据；图片表头日期识别失败时必须中止；不允许为了凑周报或补齐日期改写日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期
 - [x] `run_daily_report.py --input-folder` 和 `watch_daily_folder.py --folder` 保留手动目录覆盖能力
 - [x] `scripts/install_watcher_launchd.sh` 会自动创建截图输入目录和日志目录
 - [x] 每次运行后自动追加数据到 `data/store_history.csv`
@@ -117,7 +117,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] `weekly_auto.py` 完成：周一处理上一天周日日报成功后自动触发上一自然周周报
 - [x] 周报周期固定为自然周（周一到周日），不依赖 crontab，不固定周一 9 点
 - [x] 周六日报完成不触发周报；周一收到并完成上周日日报后，先推送日报，再检查并推送周报
-- [x] 周中缺一天或多天时周报照常推送，并在卡片中标注缺失日期
+- [x] 周报发送前执行日期连号检查；缺一天或多天时默认照常推送，并在卡片开头醒目标注缺失日期；不伪造数据
 - [x] `data/weekly_state.json` 记录已推送自然周周期，避免重复推送
 - [x] 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准
 - [x] 支持 `--dry-run`：只打印卡片 JSON，不推送
@@ -264,6 +264,7 @@ grep "目标日期" data/pipeline_log.csv
 - LaunchAgent 监听服务自动识别图片并执行 `run_daily_report.py`。
 - 日报链路自动生成 Excel、JSON、飞书日报卡片，并追加 `data/store_history.csv`。
 - 日报业务日期必须来自图片表头/真实营业数据。
+- 图片表头日期识别失败时必须中止，不允许 fallback 到系统日期。
 - 不允许为了凑周报或补齐日期而修改日报日期。
 - 不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期。
 - 周一只是周报触发时机，不得覆盖日报业务日期。
@@ -271,7 +272,9 @@ grep "目标日期" data/pipeline_log.csv
 - 不使用 crontab，不固定周一 9 点。
 - 周六日报完成不触发周报。
 - 周一收到并完成上周日日报后，先推送日报，再检查并推送上一自然周周报。
-- 如果周中缺一天或多天，周报照常推送，并标注缺失日期。
+- 周报发送前必须检查区间内业务日期是否连号。
+- 如果周中缺一天或多天，默认照常推送，并在卡片开头醒目标注缺失日期；如配置 `STRICT_WEEKLY_DATE_CHECK=true`，则缺日期时停止推送。
+- 缺日期时不伪造、不补齐、不用前后日期替代。
 - 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复。
 - 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准。
 

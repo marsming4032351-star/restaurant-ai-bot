@@ -37,3 +37,6 @@ FIELD_ALIASES = {
     "日期": "date", "门店": "store_id", "门店编号": "store_id",
     "菜品": "dish_name", "菜名": "dish_name", "销量": "qty", "数量": "qty",
 }
+
+# 周报日期校验：默认允许缺日期发送，但必须在周报中醒目标注缺失日期。
+STRICT_WEEKLY_DATE_CHECK = os.getenv("STRICT_WEEKLY_DATE_CHECK", "false").lower() in {"1", "true", "yes", "y"}

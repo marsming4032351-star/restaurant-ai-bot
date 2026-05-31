@@ -255,6 +255,16 @@ def build_card(stats: dict, analysis: dict) -> dict:
 
     elems = []
 
+    if missing_dates:
+        elems.append({
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": f"**本周数据不完整，缺少以下日期：{'、'.join(missing_dates)}**",
+            },
+        })
+        elems.append({"tag": "hr"})
+
     # ── KPI 4 列 ──────────────────────────────────────────
     elems.append({
         "tag": "column_set", "flex_mode": "none", "background_style": "grey",
@@ -424,6 +434,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="只打印统计和卡片 JSON，不推送飞书")
     args = ap.parse_args()
+    strict_weekly_date_check = config.STRICT_WEEKLY_DATE_CHECK
 
     # 确定日期范围（优先级：--last-week > --start/--end > --days）
     if args.last_week:
@@ -456,6 +467,9 @@ def main():
     stats["missing_dates"] = [str(d) for d in expected if d not in found]
     if stats["missing_dates"]:
         print(f"[weekly] 本周缺失数据: {', '.join(stats['missing_dates'])}")
+        if strict_weekly_date_check:
+            print("[weekly] strict_weekly_date_check=true，缺少日期，停止推送。")
+            sys.exit(1)
     print(f"[weekly] 本周总收入: ¥{stats['total_revenue']:,.2f}　"
           f"日均: ¥{stats['daily_avg_revenue']:,.2f}　"
           f"烤鸭: {stats['duck_total_week']}只")

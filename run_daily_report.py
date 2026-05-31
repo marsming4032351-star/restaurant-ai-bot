@@ -37,6 +37,10 @@ STARTUP_DOCS = [
 ]
 PIPELINE_COLUMNS = [
     "date",
+    "business_date",
+    "processing_date",
+    "source_date_from_image",
+    "date_validation_status",
     "store_name",
     "source_type",
     "source_file",
@@ -143,6 +147,27 @@ def extract_business_date(daily_json: dict) -> str:
         if parsed:
             return parsed
     raise ValueError("图片识别结果缺少表头业务日期，不能用系统日期代替日报日期")
+
+
+def validate_business_date(source_date_from_image: str, processing_date: str | None = None) -> dict:
+    business_date = parse_business_date(source_date_from_image)
+    if not business_date:
+        return {
+            "business_date": "",
+            "processing_date": processing_date or "",
+            "source_date_from_image": "",
+            "date_validation_status": "missing_image_date",
+        }
+    status = "ok"
+    parsed_processing_date = parse_business_date(processing_date)
+    if parsed_processing_date and parsed_processing_date != business_date:
+        status = "warning_processing_date_differs"
+    return {
+        "business_date": business_date,
+        "processing_date": processing_date or "",
+        "source_date_from_image": business_date,
+        "date_validation_status": status,
+    }
 
 
 def build_extraction_prompt(store: str, processing_date: str | None = None) -> str:
@@ -291,6 +316,9 @@ def run_git_commit_push(files: list[Path], message: str) -> None:
 def _pipeline_row(
     *,
     report_date: str,
+    processing_date: str = "",
+    source_date_from_image: str = "",
+    date_validation_status: str = "",
     store: str,
     image_path: Path,
     excel_path: Path | None,
@@ -301,6 +329,10 @@ def _pipeline_row(
 ) -> dict:
     return {
         "date": report_date,
+        "business_date": report_date,
+        "processing_date": processing_date,
+        "source_date_from_image": source_date_from_image,
+        "date_validation_status": date_validation_status,
         "store_name": store,
         "source_type": "screenshot",
         "source_file": str(image_path),
@@ -336,13 +368,25 @@ def run_daily_report(args: argparse.Namespace) -> int:
     excel_path = None
     processing_date = getattr(args, "date", None)
     business_date = ""
+    source_date_from_image = ""
+    date_validation_status = ""
     report_path = None
     try:
         print(f"[daily] 识别图片: {image_path}")
         daily_json = recognize_image(image_path, args.store, processing_date)
-        business_date = extract_business_date(daily_json)
+        try:
+            source_date_from_image = extract_business_date(daily_json)
+        except ValueError:
+            date_validation_status = "missing_image_date"
+            raise
+        validation = validate_business_date(source_date_from_image, processing_date)
+        business_date = validation["business_date"]
+        source_date_from_image = validation["source_date_from_image"]
+        date_validation_status = validation["date_validation_status"]
         report_path = config.OUTPUT_DIR / f"report_{args.store_id}_{business_date}.json"
         print(f"[daily] 图片表头业务日期: {business_date}")
+        if date_validation_status != "ok":
+            print(f"[daily] 日期校验提示: {date_validation_status}，以图片表头日期为准")
 
         if is_already_pushed(PIPELINE_LOG, business_date, args.store) and not args.force:
             print(f"[daily] {args.store} · {business_date} 已成功推送，跳过。需要重跑请加 --force")
@@ -362,6 +406,9 @@ def run_daily_report(args: argparse.Namespace) -> int:
             PIPELINE_LOG,
             _pipeline_row(
                 report_date=business_date,
+                processing_date=processing_date or "",
+                source_date_from_image=source_date_from_image,
+                date_validation_status=date_validation_status,
                 store=args.store,
                 image_path=image_path,
                 excel_path=excel_path,
@@ -397,6 +444,9 @@ def run_daily_report(args: argparse.Namespace) -> int:
             PIPELINE_LOG,
             _pipeline_row(
                 report_date=business_date,
+                processing_date=processing_date or "",
+                source_date_from_image=source_date_from_image,
+                date_validation_status=date_validation_status,
                 store=args.store,
                 image_path=image_path,
                 excel_path=excel_path,

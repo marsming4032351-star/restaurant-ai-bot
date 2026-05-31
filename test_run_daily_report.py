@@ -147,6 +147,12 @@ class RunDailyReportTests(unittest.TestCase):
                     encoding="utf-8",
                 )
                 main_calls.append(excel_path)
+                store_history = data_dir / "store_history.csv"
+                store_history.write_text(
+                    "date,store_name,revenue\n"
+                    "2026-05-31,便宜坊马连道,1\n",
+                    encoding="utf-8",
+                )
 
             args = SimpleNamespace(
                 image=str(image),
@@ -181,8 +187,60 @@ class RunDailyReportTests(unittest.TestCase):
             with pipeline_log.open(encoding="utf-8", newline="") as f:
                 rows = list(csv.DictReader(f))
             self.assertEqual(rows[-1]["date"], "2026-05-31")
+            self.assertEqual(rows[-1]["business_date"], "2026-05-31")
+            self.assertEqual(rows[-1]["processing_date"], "2026-06-01")
+            self.assertEqual(rows[-1]["source_date_from_image"], "2026-05-31")
+            self.assertEqual(rows[-1]["date_validation_status"], "warning_processing_date_differs")
             self.assertIn("便宜坊马连道_2026-05-31.xlsx", rows[-1]["excel_file"])
             self.assertIn("report_MLD_2026-05-31.json", rows[-1]["report_file"])
+            self.assertIn("2026-05-31", (data_dir / "store_history.csv").read_text(encoding="utf-8"))
+
+    def test_missing_image_header_date_aborts_before_excel_and_push(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            image = base / "daily.png"
+            image.write_bytes(b"fake image")
+            pipeline_log = base / "pipeline_log.csv"
+            data_dir = base / "data"
+            output_dir = base / "output"
+            output_dir.mkdir()
+            args = SimpleNamespace(
+                image=str(image),
+                input_folder=str(base),
+                store="便宜坊马连道",
+                store_id="MLD",
+                date="2026-06-01",
+                force=False,
+            )
+
+            with patch.object(R, "PIPELINE_LOG", pipeline_log), \
+                 patch.object(R.config, "DATA_DIR", data_dir), \
+                 patch.object(R.config, "OUTPUT_DIR", output_dir), \
+                 patch.object(R, "read_startup_context", return_value=None), \
+                 patch.object(R, "recognize_image", return_value={"本日收入": 1}), \
+                 patch.object(R.image_to_excel, "build_excel") as build_excel, \
+                 patch.dict("sys.modules", {"main": SimpleNamespace(run=lambda *a, **k: self.fail("main.run should not be called"))}), \
+                 patch.object(R, "run_git_commit_push", return_value=None), \
+                 patch.object(R, "now_iso", return_value="2026-06-01T06:00:00+08:00"):
+                exit_code = R.run_daily_report(args)
+
+            self.assertEqual(exit_code, 1)
+            build_excel.assert_not_called()
+            self.assertFalse((data_dir / "store_history.csv").exists())
+            with pipeline_log.open(encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f))
+            self.assertEqual(rows[-1]["status"], "failed")
+            self.assertEqual(rows[-1]["business_date"], "")
+            self.assertEqual(rows[-1]["processing_date"], "2026-06-01")
+            self.assertEqual(rows[-1]["date_validation_status"], "missing_image_date")
+
+    def test_date_parameter_mismatch_uses_image_date_and_records_warning(self):
+        validation = R.validate_business_date("2026-05-31", "2026-06-01")
+
+        self.assertEqual(validation["business_date"], "2026-05-31")
+        self.assertEqual(validation["source_date_from_image"], "2026-05-31")
+        self.assertEqual(validation["processing_date"], "2026-06-01")
+        self.assertEqual(validation["date_validation_status"], "warning_processing_date_differs")
 
     def test_parser_prefers_report_header_date_over_supplied_processing_date(self):
         with tempfile.TemporaryDirectory() as tmp:

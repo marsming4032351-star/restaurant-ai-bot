@@ -185,6 +185,76 @@ class WeeklyAutoTests(unittest.TestCase):
                 },
             )
             self.assertIn("本周缺失数据：2026-05-28", json.dumps(card, ensure_ascii=False))
+            self.assertIn("本周数据不完整，缺少以下日期：2026-05-28", json.dumps(card, ensure_ascii=False))
+
+    def test_strict_weekly_date_check_blocks_push_when_day_is_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_path = Path(tmp) / "store_history.csv"
+            state_path = Path(tmp) / "weekly_state.json"
+            days = [
+                "2026-05-25",
+                "2026-05-26",
+                "2026-05-27",
+                "2026-05-29",
+                "2026-05-30",
+                "2026-05-31",
+            ]
+            calls = []
+            write_history(history_path, days)
+
+            result = weekly_auto.check_and_push(
+                "便宜坊马连道",
+                "2026-05-31",
+                run_date=date(2026, 6, 1),
+                history_path=history_path,
+                state_path=state_path,
+                push_weekly=calls.append,
+                strict_weekly_date_check=True,
+            )
+
+            self.assertFalse(result["triggered"])
+            self.assertEqual(result["reason"], "missing_dates_strict")
+            self.assertEqual(result["missing_dates"], ["2026-05-28"])
+            self.assertEqual(calls, [])
+            self.assertFalse(state_path.exists())
+
+    def test_complete_weekly_range_card_does_not_show_missing_warning(self):
+        rows = []
+        for i in range(7):
+            day = date(2026, 5, 25) + timedelta(days=i)
+            rows.append(
+                {
+                    "_date": day,
+                    "date": str(day),
+                    "store_name": "便宜坊马连道",
+                    "revenue": "10000",
+                    "customer_count": "100",
+                    "avg_ticket": "100",
+                    "discount_rate": "35",
+                    "roast_duck_sales": "20",
+                    "warning_level": "健康",
+                    "summary": "",
+                }
+            )
+        stats = weekly_report.calc_stats(rows)
+        stats["period_start_date"] = "2026-05-25"
+        stats["period_end_date"] = "2026-05-31"
+        stats["expected_days"] = 7
+        stats["missing_dates"] = []
+
+        card = weekly_report.build_card(
+            stats,
+            {
+                "trend_summary": "测试趋势",
+                "main_issues": [],
+                "next_week_suggestions": [],
+                "focus_metric": "",
+            },
+        )
+        card_json = json.dumps(card, ensure_ascii=False)
+
+        self.assertIn("本周数据完整", card_json)
+        self.assertNotIn("本周数据不完整", card_json)
 
     def test_same_natural_week_is_not_pushed_twice(self):
         with tempfile.TemporaryDirectory() as tmp:
