@@ -480,7 +480,48 @@ scripts/status_watcher_launchd.sh
 
 ---
 
-## Workflow 3：项目健康检查
+## Workflow 3：周报可视化看板
+
+### 目标
+
+在不改变现有日报、周报推送逻辑的前提下，把已验证过的周报数据渲染成 ECharts 风格经营看板图片，用于飞书汇报和经营复盘。
+
+### 输入
+
+- `data/store_history.csv`
+- 显式传入的周报区间：`--start-date` 和 `--end-date`
+- 门店名：`--store`
+
+### 处理
+
+1. 读取指定门店在指定周报区间内的真实历史数据。
+2. 检查区间内日期是否缺失。
+3. 生成深色科技感 HTML 看板和 16:9 PNG 看板。
+4. 默认不推送飞书；如后续需要，可用独立 `--push-feishu` 参数，不接入现有 `weekly_auto.py` 主流程。
+
+### 输出
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31
+```
+
+- `output/weekly_dashboard_便宜坊马连道_2026-05-25_2026-05-31.html`
+- `output/weekly_dashboard_便宜坊马连道_2026-05-25_2026-05-31.png`
+
+### 关键约束
+
+- 这是周报数据可视化增强层，只读取已验证周报数据。
+- 不修改 `store_history.csv`、`pipeline_log.csv` 或任何业务日期。
+- 周报区间必须显式传入，不能用系统日期推断。
+- 缺失日期必须显示提示，不伪造、不补齐。
+- `STRICT_WEEKLY_DATE_CHECK=true` 时，缺失日期会阻止生成推送图片。
+
+---
+
+## Workflow 4：项目健康检查
 
 ### 目标
 

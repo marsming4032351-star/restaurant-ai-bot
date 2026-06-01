@@ -1,0 +1,73 @@
+---
+name: weekly_dashboard
+description: Generate an ECharts-style weekly restaurant operations dashboard from verified weekly report data, export HTML/PNG, and optionally push the dashboard image to Feishu without modifying business data.
+---
+
+# 周报可视化看板 Skill
+
+## 用途
+
+把已经验证过的周报数据渲染成餐饮经营大屏风格看板，用于飞书汇报、经营复盘和周报增强展示。
+
+该 skill 是“周报数据可视化增强层”，不改变现有日报/周报数据逻辑，不写入、不覆盖、不修正任何真实业务数据。
+
+## 输入
+
+- 门店名：例如 `便宜坊马连道`
+- 周报统计区间：`--start-date YYYY-MM-DD` 与 `--end-date YYYY-MM-DD`
+- 数据来源：默认读取 `data/store_history.csv`，也可通过 `--history-path` 指定
+
+业务日期规则：
+- 日报 `business_date` 仍然只能来自图片表头日期。
+- 系统日期、文件创建日期、监听日期不能覆盖业务日期。
+- 本 skill 必须显式传入周报区间，不允许用 `date.today()` 或 `datetime.now()` 推断业务周。
+
+## 输出
+
+- `output/weekly_dashboard_<store_name>_<start_date>_<end_date>.html`
+- `output/weekly_dashboard_<store_name>_<start_date>_<end_date>.png`
+
+看板默认 16:9 横版，深色科技感背景，蓝紫主色，适合飞书图片推送。
+
+## 调用方式
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31
+```
+
+可选参数：
+
+```bash
+--history-path data/store_history.csv
+--output-dir output
+--strict-weekly-date-check
+--push-feishu
+```
+
+`--push-feishu` 只在项目现有飞书 App 图片上传配置可用时发送图片；默认不推送。
+
+## 日期校验
+
+- 看板标题和文件名必须使用传入的周报统计区间。
+- 周报统计区间必须来自 `weekly_report` 或 `weekly_auto` 的结果。
+- 如果发现缺失日期，看板必须显示“缺失日期提示”，不得伪造数据。
+- `STRICT_WEEKLY_DATE_CHECK=true` 或传入 `--strict-weekly-date-check` 时，缺失日期会阻止生成推送图片。
+
+## 图表模块
+
+- 本周每日营业额柱状图
+- 本周每日客流折线图
+- 本周营业额趋势面积图
+- 本周收入结构饼图；无结构数据时显示“暂无分类数据”
+- TOP 指标横向条形图；菜品数据不足时使用每日营业额排行
+- 一周经营强弱极坐标图
+- 核心 KPI 卡片：总营业额、日均营业额、最高/最低营业日、周报天数、缺失日期
+
+## 注意事项
+
+- 只读取周报数据，不修改 `store_history.csv`、`pipeline_log.csv` 或任何业务日期。
+- 不接入现有 `weekly_auto.py` 主流程；是否自动随周报发送，后续再决定。
+- 不打印 `.env`、webhook、token、app secret 等敏感信息。

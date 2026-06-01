@@ -444,6 +444,28 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 - [ ] 多店支持：适配御炉通明湖等不同格式门店
 - [x] 周报自动触发：周一处理上一天周日日报完成后自动推送上一自然周周报
 - [ ] 日报日期自动从截图标题中识别并传入 `run_daily_report.py`
+- [x] 周报可视化看板：独立 skill 将已验证周报数据渲染为 ECharts 风格 HTML/PNG
+
+---
+
+## 周报可视化看板 Skill
+
+`skills/weekly_dashboard/` 是周报数据可视化增强层，只读取已验证过的周报数据，不改变现有日报/周报推送逻辑，也不修改 `store_history.csv`、`pipeline_log.csv` 或任何业务日期。
+
+运行方式：
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31
+```
+
+输出：
+- `output/weekly_dashboard_便宜坊马连道_2026-05-25_2026-05-31.html`
+- `output/weekly_dashboard_便宜坊马连道_2026-05-25_2026-05-31.png`
+
+看板使用深色科技感 ECharts 风格，包含营业额柱状图、客流折线图、营业额面积趋势、收入结构饼图、TOP 横向条形图、一周经营强弱极坐标图和核心 KPI 卡片。周报区间必须显式传入，不能用系统日期推断；如有缺失日期，看板会提示，且不会伪造数据。
 
 ---
 

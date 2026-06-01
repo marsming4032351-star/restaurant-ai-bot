@@ -21,6 +21,7 @@ venv/
 logs/
 output/*.png
 output/*.json
+output/*.html
 output/*.log
 output/.feishu_token.json
 

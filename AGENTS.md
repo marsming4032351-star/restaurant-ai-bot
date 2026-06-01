@@ -141,6 +141,7 @@ git push origin main
 | `image_to_excel.py` | JSON → 标准 Excel |
 | `weekly_auto.py` | 周一在上一天周日日报完成后自动触发上一自然周周报 |
 | `weekly_report.py` | 周报统计、缺失日期提示和飞书推送 |
+| `skills/weekly_dashboard/` | 周报可视化增强层，读取已验证周报数据生成 HTML/PNG 看板 |
 | `.env` | 凭证（不打印，不提交） |
 | `docs/WORKFLOWS.md` | 完整流程说明 |
 | `docs/AGENT_ONBOARDING.md` | 禁止事项和接入规范 |
@@ -165,6 +166,7 @@ python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx
 python3 image_to_excel.py --date YYYY-MM-DD --json '{...}'
 python3 weekly_report.py --last-week
 python3 weekly_report.py --last-week --dry-run
+python3 skills/weekly_dashboard/render_weekly_dashboard.py --store "便宜坊马连道" --start-date YYYY-MM-DD --end-date YYYY-MM-DD
 python3 -m unittest test_run_daily_report.py test_weekly_auto.py
 cat data/pipeline_state.json
 grep "YYYY-MM-DD" data/pipeline_log.csv

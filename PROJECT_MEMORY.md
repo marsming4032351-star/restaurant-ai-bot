@@ -122,6 +122,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准
 - [x] 支持 `--dry-run`：只打印卡片 JSON，不推送
 - [x] `scripts/run_weekly.sh` 已创建，有可执行权限（当前作为手动/兼容入口，不作为主自动化依赖）
+- [x] `skills/weekly_dashboard/` 完成：独立读取已验证周报数据，生成 ECharts 风格 HTML/PNG 看板，不改变现有日报/周报业务逻辑
 
 ### 自动化
 - [x] 周报自动化已改为日报成功后的条件触发，不使用 crontab
@@ -344,6 +345,7 @@ grep "目标日期" data/pipeline_log.csv
 - **日报运行**：`python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx`
 - **周报运行**：`python3 weekly_report.py --last-week`
 - **验证（不推送）**：`python3 weekly_report.py --last-week --dry-run`
+- **周报看板**：`python3 skills/weekly_dashboard/render_weekly_dashboard.py --store "便宜坊马连道" --start-date YYYY-MM-DD --end-date YYYY-MM-DD`
 - **读图流程**：截图 → 发给 Claude → Claude 输出 JSON → `image_to_excel.py --date YYYY-MM-DD --json '...'`
 - **一键截图日报**：截图默认放 `/Users/ming/Restaurant/daily-input/马连道`，运行 `python3 run_daily_report.py --store 便宜坊马连道`，业务日期以图片表头为准
 - **指定输入目录**：`python3 run_daily_report.py --input-folder "/path/to/screenshots" --store 便宜坊马连道`，业务日期以图片表头为准
@@ -353,3 +355,11 @@ grep "目标日期" data/pipeline_log.csv
 - **重复字段前缀**：`烤鸭_月累计`、`套餐_日累计`、`鱼类_月累计` 等
 - **备份**：`.backup_v2/` 是 v2 版本快照，不要删除
 - **敏感信息**：`.env` 内容不要打印或提交到 git
+
+### 周报可视化看板 Skill
+
+`skills/weekly_dashboard/` 是“周报数据可视化增强层”。它只读取 `store_history.csv` 中已验证的周报区间数据，生成：
+- `output/weekly_dashboard_<store_name>_<start_date>_<end_date>.html`
+- `output/weekly_dashboard_<store_name>_<start_date>_<end_date>.png`
+
+该 skill 不修改业务数据、不覆盖日期、不接入 `weekly_auto.py` 主流程。周报区间必须显式传入，不能用系统日期推断；缺失日期会显示在看板中，`STRICT_WEEKLY_DATE_CHECK=true` 时缺失日期会阻止生成推送图片。
