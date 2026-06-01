@@ -296,7 +296,39 @@ grep "目标日期" data/pipeline_log.csv
 
 ---
 
-## 10. 下一步任务（优先级排序）
+## 10. 2026-06-01 日报/周报日期校验增强与真实流程验证
+
+本次项目能力从“能识别日报并推送”升级为“能防止日期污染历史数据，并能在周一收到周日数据后自动触发上周周报”。
+
+已完成能力：
+- 日报 `business_date` 只来自图片表头日期。
+- 系统当天日期、文件创建日期、监听日期不能覆盖业务日期。
+- `processing_date` 只用于日志，不用于日报标题、Excel 文件名、`store_history.csv` 业务日期、`pipeline_log.csv` 业务日期。
+- 图片表头日期识别失败时流程中止，不 fallback 到今天。
+- `--date` 与图片表头日期不一致时，以图片表头日期为准，并记录 warning。
+- 周报发送前检查自然周日期完整性。
+- 默认允许缺失日期时发送周报，但卡片提示缺失日期。
+- `STRICT_WEEKLY_DATE_CHECK=true` 时，缺失日期会阻止周报发送。
+- 周一收到周日数据图后，先推送周日日报，再自动触发上一周周报。
+
+真实流程验证结果：
+- 图片表头日期：`2026-05-31`
+- 日报推送：成功
+- 日报标题：`便宜坊马连道 · 2026-05-31 经营日报`
+- Excel 文件：`data/便宜坊马连道_2026-05-31.xlsx`
+- Excel 表头日期：`2026 年 5 月 31 日`
+- 周报触发：已触发并推送成功
+- 周报统计区间：`2026-05-25` 到 `2026-05-31`
+- 周报天数：`7`
+- 缺失日期：无
+- `date_check_status=complete`
+- `pipeline_log.csv`：`business_date=2026-05-31`，`processing_date=2026-06-01`，`source_date_from_image=2026-05-31`，`date_validation_status=warning_processing_date_differs`
+- git status：干净
+- 最新状态提交 commit：`a3a4040`
+
+---
+
+## 11. 下一步任务（优先级排序）
 
 1. **持续积累日报数据**：每天把真实截图放入 `/Users/ming/Restaurant/daily-input/马连道`
 2. **标准化输入**：支持从 `daily/` 文件夹批量处理多日截图
@@ -307,7 +339,7 @@ grep "目标日期" data/pipeline_log.csv
 
 ---
 
-## 11. 工作约定
+## 12. 工作约定
 
 - **日报运行**：`python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx`
 - **周报运行**：`python3 weekly_report.py --last-week`

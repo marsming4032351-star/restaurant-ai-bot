@@ -450,6 +450,34 @@ scripts/status_watcher_launchd.sh
 - 新增 `data/weekly_state.json`。
 - 验证命令：`python3 -m unittest test_run_daily_report.py test_weekly_auto.py`，共 15 个测试 OK。
 
+### 2026-06-01 真实流程验证
+
+本次项目从“能识别日报并推送”升级为“能防止日期污染历史数据，并能在周一收到周日数据后自动触发上周周报”。
+
+已完成工作流约束：
+- 日报 `business_date` 只来自图片表头日期。
+- 系统当天日期、文件创建日期、监听日期不能覆盖业务日期。
+- `processing_date` 只用于日志，不用于日报标题、Excel 文件名、`store_history.csv` 业务日期或 `pipeline_log.csv` 业务日期。
+- 图片表头日期识别失败时流程中止，不 fallback 到今天。
+- `--date` 与图片表头日期不一致时，以图片表头日期为准，并记录 warning。
+- 周报发送前检查自然周日期完整性。
+- 默认允许缺失日期时发送周报，但卡片提示缺失日期；`STRICT_WEEKLY_DATE_CHECK=true` 时，缺失日期阻止周报发送。
+- 周一收到周日数据图后，先推送周日日报，再自动触发上一周周报。
+
+真实链路结果：
+- 图片表头日期：`2026-05-31`
+- 日报推送：成功
+- 日报标题：`便宜坊马连道 · 2026-05-31 经营日报`
+- Excel 文件：`data/便宜坊马连道_2026-05-31.xlsx`
+- Excel 表头日期：`2026 年 5 月 31 日`
+- 周报触发：已触发并推送成功
+- 周报统计区间：`2026-05-25` 到 `2026-05-31`
+- 周报天数：`7`
+- 缺失日期：无
+- `date_check_status=complete`
+- `pipeline_log.csv`：`business_date=2026-05-31`，`processing_date=2026-06-01`，`source_date_from_image=2026-05-31`，`date_validation_status=warning_processing_date_differs`
+- 最新状态提交 commit：`a3a4040`
+
 ---
 
 ## Workflow 3：项目健康检查

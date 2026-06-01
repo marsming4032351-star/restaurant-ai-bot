@@ -53,6 +53,13 @@ ls -la data/store_history.csv .env
 - 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复
 - 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准
 
+### 2026-06-01 真实流程验证结论
+
+- 项目已从“能识别日报”升级为“能防止日期污染历史数据，并能在周一收到周日数据后自动触发上周周报”。
+- 真实截图表头日期 `2026-05-31`，日报标题、Excel 文件名、`store_history.csv`、`pipeline_log.csv` 业务日期均保持 `2026-05-31`。
+- 处理日期 `2026-06-01` 只记录为 `processing_date`；`date_validation_status=warning_processing_date_differs`。
+- 周报已自动触发，区间 `2026-05-25` 到 `2026-05-31`，7 天完整，缺失日期无，`date_check_status=complete`。
+
 ---
 
 ## 四、用户发来日报截图时，自动执行完整流程
