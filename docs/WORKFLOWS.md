@@ -497,7 +497,8 @@ scripts/status_watcher_launchd.sh
 1. 读取指定门店在指定周报区间内的真实历史数据。
 2. 检查区间内日期是否缺失。
 3. 生成深色科技感 HTML 看板和 16:9 PNG 看板。
-4. 默认不推送飞书；如后续需要，可用独立 `--push-feishu` 参数，不接入现有 `weekly_auto.py` 主流程。
+4. 默认不推送飞书；如需要，可用独立 `--send-to-feishu` 参数，不接入现有 `weekly_auto.py` 主流程。
+5. 传入 `--send-to-feishu` 时，PNG 成功生成后复用现有飞书推送逻辑发送标题、说明和看板图片。
 
 ### 输出
 
@@ -511,6 +512,16 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 - `output/weekly_dashboard_便宜坊马连道_2026-05-25_2026-05-31.html`
 - `output/weekly_dashboard_便宜坊马连道_2026-05-25_2026-05-31.png`
 
+可选推送：
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31 \
+  --send-to-feishu
+```
+
 ### 关键约束
 
 - 这是周报数据可视化增强层，只读取已验证周报数据。
@@ -518,6 +529,8 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 - 周报区间必须显式传入，不能用系统日期推断。
 - 缺失日期必须显示提示，不伪造、不补齐。
 - `STRICT_WEEKLY_DATE_CHECK=true` 时，缺失日期会阻止生成推送图片。
+- 不传 `--send-to-feishu` 时不调用飞书推送；PNG 不存在时不允许推送。
+- 推送过程不打印 `.env`、webhook、token、app secret 等敏感信息。
 
 ---
 

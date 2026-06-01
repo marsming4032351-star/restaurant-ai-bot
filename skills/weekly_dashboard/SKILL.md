@@ -44,10 +44,10 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 --history-path data/store_history.csv
 --output-dir output
 --strict-weekly-date-check
---push-feishu
+--send-to-feishu
 ```
 
-`--push-feishu` 只在项目现有飞书 App 图片上传配置可用时发送图片；默认不推送。
+`--send-to-feishu` 只在 PNG 生成成功后，复用项目现有飞书推送逻辑发送“标题 + 说明 + 看板图片”；默认不推送。历史兼容参数 `--push-feishu` 仍可用，但新流程统一使用 `--send-to-feishu`。
 
 ## 日期校验
 
@@ -70,4 +70,6 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 
 - 只读取周报数据，不修改 `store_history.csv`、`pipeline_log.csv` 或任何业务日期。
 - 不接入现有 `weekly_auto.py` 主流程；是否自动随周报发送，后续再决定。
+- 不传 `--send-to-feishu` 时只生成 HTML/PNG，不调用飞书推送。
+- 传 `--send-to-feishu` 时必须先成功生成 PNG；PNG 不存在时中止推送。
 - 不打印 `.env`、webhook、token、app secret 等敏感信息。

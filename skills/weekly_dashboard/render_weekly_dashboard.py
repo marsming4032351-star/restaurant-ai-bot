@@ -468,12 +468,30 @@ def render_dashboard(
     }
 
 
+def send_dashboard_to_feishu(png_path: Path, store: str, start_date: str, end_date: str) -> None:
+    import feishu_bot
+
+    png_path = Path(png_path)
+    if not png_path.exists():
+        raise FileNotFoundError(f"PNG 不存在，不能推送飞书: {png_path}")
+    if not feishu_bot._has_app_creds():
+        raise RuntimeError("未配置飞书 App 图片上传凭证，已跳过图片推送")
+    title = f"{store}｜{start_date} 至 {end_date} 周报可视化看板"
+    note = "本看板基于已校验周报数据生成，业务日期来自图片表头日期。"
+    key = feishu_bot._upload_image(png_path)
+    feishu_bot.send_text(f"{title}\n{note}", ensure_keyword=False)
+    feishu_bot._send_image_key(key)
+
+
 def push_to_feishu(png_path: Path) -> None:
     import feishu_bot
 
+    png_path = Path(png_path)
+    if not png_path.exists():
+        raise FileNotFoundError(f"PNG 不存在，不能推送飞书: {png_path}")
     if not feishu_bot._has_app_creds():
         raise RuntimeError("未配置飞书 App 图片上传凭证，已跳过图片推送")
-    key = feishu_bot._upload_image(Path(png_path))
+    key = feishu_bot._upload_image(png_path)
     feishu_bot._send_image_key(key)
 
 
@@ -485,7 +503,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--history-path", default=str(config.DATA_DIR / "store_history.csv"), help="历史数据 CSV")
     parser.add_argument("--output-dir", default=str(config.OUTPUT_DIR), help="输出目录")
     parser.add_argument("--strict-weekly-date-check", action="store_true", help="缺失日期时停止生成")
-    parser.add_argument("--push-feishu", action="store_true", help="生成后推送 PNG 到飞书；默认不推送")
+    parser.add_argument("--send-to-feishu", action="store_true", help="生成后推送 PNG 到飞书；默认不推送")
+    parser.add_argument("--push-feishu", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -500,8 +519,8 @@ def main() -> int:
         strict_weekly_date_check=args.strict_weekly_date_check or None,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    if args.push_feishu:
-        push_to_feishu(Path(result["png_path"]))
+    if args.send_to_feishu or args.push_feishu:
+        send_dashboard_to_feishu(Path(result["png_path"]), args.store, result["start_date"], result["end_date"])
         print("[weekly-dashboard] 已推送看板图片到飞书")
     return 0
 

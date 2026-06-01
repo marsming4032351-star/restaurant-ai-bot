@@ -75,9 +75,9 @@ def _upload_image(image_path: Path) -> str:
     return data["data"]["image_key"]
 
 # ── 发纯文本(兜底) ────────────────────────────────────────
-def send_text(text: str) -> dict:
+def send_text(text: str, ensure_keyword: bool = True) -> dict:
     _check_webhook()
-    if KEYWORD not in text:
+    if ensure_keyword and KEYWORD not in text:
         text = f"[日报] {text}"
     resp = requests.post(
         WEBHOOK,

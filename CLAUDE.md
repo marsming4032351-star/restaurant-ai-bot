@@ -185,6 +185,9 @@ python3 weekly_report.py --last-week --dry-run
 # 周报可视化看板（不改业务数据）
 python3 skills/weekly_dashboard/render_weekly_dashboard.py --store "便宜坊马连道" --start-date YYYY-MM-DD --end-date YYYY-MM-DD
 
+# 周报看板图片推送（独立可选，不接入主流程）
+python3 skills/weekly_dashboard/render_weekly_dashboard.py --store "便宜坊马连道" --start-date YYYY-MM-DD --end-date YYYY-MM-DD --send-to-feishu
+
 # 周报自动化测试
 python3 -m unittest test_run_daily_report.py test_weekly_auto.py
 
@@ -197,3 +200,5 @@ grep "YYYY-MM-DD" data/pipeline_log.csv
 # 查最近5条日志
 tail -n 5 data/pipeline_log.csv
 ```
+
+`--send-to-feishu` 只在 PNG 成功生成后复用现有飞书推送逻辑发送标题、说明和看板图片；默认不推送，PNG 不存在时不允许发送，也不输出 `.env`、webhook、token 或 app secret。

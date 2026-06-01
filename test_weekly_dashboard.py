@@ -1,8 +1,10 @@
 import csv
 import importlib.util
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = Path("skills/weekly_dashboard/render_weekly_dashboard.py")
@@ -132,6 +134,108 @@ class WeeklyDashboardTests(unittest.TestCase):
             dashboard.render_dashboard(store="便宜坊马连道", start_date=None, end_date="2026-05-31")
         with self.assertRaisesRegex(ValueError, "必须显式传入"):
             dashboard.render_dashboard(store="便宜坊马连道", start_date="2026-05-25", end_date=None)
+
+    def test_cli_without_send_to_feishu_does_not_call_feishu_sender(self):
+        dashboard = load_dashboard_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            history_path = base / "store_history.csv"
+            output_dir = base / "output"
+            dates = [f"2026-05-{day:02d}" for day in range(25, 32)]
+            write_history(history_path, dates)
+            argv = [
+                "render_weekly_dashboard.py",
+                "--store",
+                "便宜坊马连道",
+                "--start-date",
+                "2026-05-25",
+                "--end-date",
+                "2026-05-31",
+                "--history-path",
+                str(history_path),
+                "--output-dir",
+                str(output_dir),
+            ]
+
+            with patch.object(sys, "argv", argv), patch.object(dashboard, "send_dashboard_to_feishu", create=True) as sender:
+                dashboard.main()
+
+            sender.assert_not_called()
+
+    def test_cli_with_send_to_feishu_calls_feishu_sender_after_png_generation(self):
+        dashboard = load_dashboard_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            history_path = base / "store_history.csv"
+            output_dir = base / "output"
+            dates = [f"2026-05-{day:02d}" for day in range(25, 32)]
+            write_history(history_path, dates)
+            argv = [
+                "render_weekly_dashboard.py",
+                "--store",
+                "便宜坊马连道",
+                "--start-date",
+                "2026-05-25",
+                "--end-date",
+                "2026-05-31",
+                "--history-path",
+                str(history_path),
+                "--output-dir",
+                str(output_dir),
+                "--send-to-feishu",
+            ]
+
+            with patch.object(sys, "argv", argv), patch.object(dashboard, "send_dashboard_to_feishu", create=True) as sender:
+                dashboard.main()
+
+            sender.assert_called_once()
+            called_png = sender.call_args.args[0]
+            self.assertTrue(Path(called_png).exists())
+            self.assertEqual(sender.call_args.args[1:], ("便宜坊马连道", "2026-05-25", "2026-05-31"))
+
+    def test_missing_png_is_not_sent_to_feishu(self):
+        dashboard = load_dashboard_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_png = Path(tmp) / "missing.png"
+
+            with patch("feishu_bot.send_text") as send_text, patch("feishu_bot._upload_image") as upload_image:
+                with self.assertRaisesRegex(FileNotFoundError, "PNG 不存在"):
+                    dashboard.send_dashboard_to_feishu(
+                        missing_png,
+                        "便宜坊马连道",
+                        "2026-05-25",
+                        "2026-05-31",
+                    )
+
+            send_text.assert_not_called()
+            upload_image.assert_not_called()
+
+    def test_send_dashboard_to_feishu_reuses_existing_feishu_helpers(self):
+        dashboard = load_dashboard_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            png_path = Path(tmp) / "dashboard.png"
+            png_path.write_bytes(b"png-bytes")
+
+            with (
+                patch("feishu_bot._has_app_creds", return_value=True),
+                patch("feishu_bot._upload_image", return_value="img_v2_123") as upload_image,
+                patch("feishu_bot.send_text") as send_text,
+                patch("feishu_bot._send_image_key") as send_image_key,
+            ):
+                dashboard.send_dashboard_to_feishu(
+                    png_path,
+                    "便宜坊马连道",
+                    "2026-05-25",
+                    "2026-05-31",
+                )
+
+            upload_image.assert_called_once_with(png_path)
+            send_text.assert_called_once_with(
+                "便宜坊马连道｜2026-05-25 至 2026-05-31 周报可视化看板\n"
+                "本看板基于已校验周报数据生成，业务日期来自图片表头日期。",
+                ensure_keyword=False,
+            )
+            send_image_key.assert_called_once_with("img_v2_123")
 
 
 if __name__ == "__main__":

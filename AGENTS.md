@@ -167,8 +167,11 @@ python3 image_to_excel.py --date YYYY-MM-DD --json '{...}'
 python3 weekly_report.py --last-week
 python3 weekly_report.py --last-week --dry-run
 python3 skills/weekly_dashboard/render_weekly_dashboard.py --store "便宜坊马连道" --start-date YYYY-MM-DD --end-date YYYY-MM-DD
+python3 skills/weekly_dashboard/render_weekly_dashboard.py --store "便宜坊马连道" --start-date YYYY-MM-DD --end-date YYYY-MM-DD --send-to-feishu
 python3 -m unittest test_run_daily_report.py test_weekly_auto.py
 cat data/pipeline_state.json
 grep "YYYY-MM-DD" data/pipeline_log.csv
 tail -n 5 data/pipeline_log.csv
 ```
+
+`--send-to-feishu` 是周报看板的独立可选图片推送开关，只在 PNG 成功生成后复用现有飞书逻辑发送标题、说明和看板图片；默认不推送，也不接入日报/周报主流程。

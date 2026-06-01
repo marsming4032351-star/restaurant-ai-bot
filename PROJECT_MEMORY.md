@@ -363,3 +363,5 @@ grep "目标日期" data/pipeline_log.csv
 - `output/weekly_dashboard_<store_name>_<start_date>_<end_date>.png`
 
 该 skill 不修改业务数据、不覆盖日期、不接入 `weekly_auto.py` 主流程。周报区间必须显式传入，不能用系统日期推断；缺失日期会显示在看板中，`STRICT_WEEKLY_DATE_CHECK=true` 时缺失日期会阻止生成推送图片。
+
+看板默认只生成 HTML/PNG，不调用飞书。需要发送到飞书群时显式增加 `--send-to-feishu`；脚本会在 PNG 生成成功后复用现有 `feishu_bot` 推送标题、说明和看板图片，PNG 不存在或图片上传配置不可用时会报错中止，且不输出任何 `.env`、webhook、token 或 app secret。

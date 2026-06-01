@@ -467,6 +467,18 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 
 看板使用深色科技感 ECharts 风格，包含营业额柱状图、客流折线图、营业额面积趋势、收入结构饼图、TOP 横向条形图、一周经营强弱极坐标图和核心 KPI 卡片。周报区间必须显式传入，不能用系统日期推断；如有缺失日期，看板会提示，且不会伪造数据。
 
+默认只生成 HTML/PNG，不推送飞书。如需把看板图片发到日报/周报相同的飞书群，显式增加：
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31 \
+  --send-to-feishu
+```
+
+`--send-to-feishu` 会在 PNG 成功生成后复用项目现有飞书推送逻辑发送标题、说明和图片；PNG 不存在或图片上传配置不可用时会报错中止，不会打印 `.env`、webhook、token 或 app secret。
+
 ---
 
 ## 11. 智能体接入说明
