@@ -230,7 +230,11 @@ def main():
     ap.add_argument("--store", default="便宜坊马连道")
     ap.add_argument("--start", default="2026-05-25")
     ap.add_argument("--end", default="2026-05-31")
-    ap.add_argument("--no-png", action="store_true", help="只生成 HTML，不渲染 PNG")
+    ap.add_argument("--no-png", action="store_true", help="只生成 HTML，不导出长图 PNG")
+    ap.add_argument("--viewport-width", type=int, default=1600, help="长图导出视口宽度（CSS px），默认 1600")
+    ap.add_argument("--scale", type=int, default=2, help="长图导出 deviceScaleFactor，默认 2（高清，可设 3）")
+    ap.add_argument("--png-engine", choices=["chrome", "pil"], default="chrome",
+                    help="PNG 导出引擎：chrome=HTML 高清长图（默认）；pil=无浏览器兜底绘制")
     ap.add_argument("--send-to-feishu", action="store_true",
                     help="PNG 生成成功后推送到飞书；缺凭证或 PNG 缺失时跳过，不输出敏感信息")
     args = ap.parse_args()
@@ -273,14 +277,28 @@ def main():
     print("WROTE", out_path)
 
     png_path = None
+    png_engine = None
+    png_dims = None
     if not args.no_png:
         png_path = os.path.join(OUT_DIR, stem + ".png")
-        render_png(args.store, args.start, args.end, days, h, r,
-                   present, missing, alerts, insights, next_week, data_quality, png_path)
-        print("WROTE", png_path)
+        if args.png_engine == "chrome":
+            try:
+                _, w, hgt, sc = export_png_via_chrome(
+                    out_path, png_path, width=args.viewport_width, scale=args.scale)
+                png_engine = "chrome"
+                png_dims = (w, hgt, sc)
+                print(f"WROTE {png_path}  (chrome 长图 viewport={w}px scale={sc} 页面高={hgt}px)")
+            except Exception as exc:
+                print(f"[fusion] Chrome 长图导出失败，退回 PIL 兜底：{type(exc).__name__}: {exc}")
+        if png_engine is None:
+            render_png(args.store, args.start, args.end, days, h, r,
+                       present, missing, alerts, insights, next_week, data_quality, png_path)
+            png_engine = "pil"
+            print(f"WROTE {png_path}  (pil 兜底绘制)")
 
     print(json.dumps({
         "history_days": h["n"], "report_days": n_present, "missing": missing,
+        "png_engine": png_engine, "png_dims": png_dims,
         "total_rev": round(h["total_rev"], 2), "total_cust": h["total_cust"],
         "we_wd_ratio": round(h["we_wd_ratio"], 3),
         "channel_dine_in": round(r["dine_in"], 2), "channel_online": round(r["online"], 2),
@@ -386,56 +404,58 @@ def render_html(store, start, end, days, h, r, present, missing, alerts, insight
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=1600, initial-scale=1"/>
 <title>{store} · 周报经营决策看板 · {start} ~ {end}</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:#070d1a;color:#e6edf7;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:26px}}
-.wrap{{max-width:1320px;margin:0 auto}}
-header{{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #1d2c44;padding-bottom:16px;margin-bottom:18px}}
-h1{{font-size:25px;font-weight:700}}
-.period{{color:#8aa0c0;font-size:13px;margin-top:6px}}
-.meta{{text-align:right;color:#6f86a8;font-size:12px;line-height:1.7}}
-.tag-layer{{color:#7fb0ff;font-size:13px;font-weight:600}}
-.verdict{{background:linear-gradient(135deg,#13233f,#1a1830);border:1px solid #2a3d5e;border-radius:14px;padding:18px 22px;font-size:15px;line-height:1.7;margin-bottom:20px}}
+/* 长图导出画布：固定 1600px 宽，不依赖浏览器缩放 */
+html,body{{width:1600px}}
+body{{background:#070d1a;color:#e6edf7;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:17px}}
+.wrap{{width:1600px;margin:0 auto;padding:48px 56px 64px}}
+header{{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #1d2c44;padding-bottom:22px;margin-bottom:26px}}
+h1{{font-size:36px;font-weight:700;letter-spacing:.5px}}
+.period{{color:#8aa0c0;font-size:18px;margin-top:12px}}
+.meta{{text-align:right;color:#6f86a8;font-size:16px;line-height:1.9}}
+.tag-layer{{color:#7fb0ff;font-size:18px;font-weight:600}}
+.verdict{{background:linear-gradient(135deg,#13233f,#1a1830);border:1px solid #2a3d5e;border-radius:16px;padding:26px 30px;font-size:21px;line-height:1.75;margin-bottom:30px}}
 .verdict b{{color:#ffd24a}}
-.section-tag{{display:inline-block;font-size:12px;color:#6f86a8;font-weight:400;margin-left:8px}}
-h2{{font-size:17px;margin:22px 0 12px;padding-left:11px;border-left:4px solid #5b8cff}}
+.section-tag{{display:inline-block;font-size:16px;color:#6f86a8;font-weight:400;margin-left:10px}}
+h2{{font-size:25px;margin:34px 0 18px;padding-left:15px;border-left:6px solid #5b8cff}}
 h2.diag{{border-left-color:#ff9f43}}
-.kpis{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}
-.kpi{{background:#0e1828;border:1px solid #1d2c44;border-radius:11px;padding:15px 17px}}
-.kpi-label{{color:#8aa0c0;font-size:12px}}
-.kpi-value{{font-size:26px;font-weight:700;margin:5px 0 2px}}
-.kpi-sub{{color:#6f86a8;font-size:11px}}
-.card{{background:#0e1828;border:1px solid #1d2c44;border-radius:12px;padding:14px 16px}}
-.row{{display:grid;gap:14px;margin-top:6px}}
+.kpis{{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}}
+.kpi{{background:#0e1828;border:1px solid #1d2c44;border-radius:14px;padding:22px 24px}}
+.kpi-label{{color:#8aa0c0;font-size:17px}}
+.kpi-value{{font-size:38px;font-weight:700;margin:8px 0 4px}}
+.kpi-sub{{color:#6f86a8;font-size:15px}}
+.card{{background:#0e1828;border:1px solid #1d2c44;border-radius:16px;padding:22px 24px}}
+.row{{display:grid;gap:20px;margin-top:10px}}
 .r-2-1{{grid-template-columns:1.7fr 1fr}}
 .r-1-1{{grid-template-columns:1fr 1fr}}
 .r-1-1-1{{grid-template-columns:1fr 1fr 1fr}}
-.card h3{{font-size:14px;color:#cdd9ec;margin-bottom:8px;font-weight:600}}
-.mtd{{color:#8aa0c0;font-size:12px;margin-top:8px;line-height:1.6}}
-.stats{{display:grid;grid-template-columns:1fr 1fr;gap:9px}}
-.stat{{background:#0c1422;border:1px solid #1a2942;border-radius:9px;padding:9px 11px}}
-.stat-label{{color:#8aa0c0;font-size:11px}}
-.stat-value{{font-size:17px;font-weight:600;margin-top:3px;color:#dfe8f5}}
-.alert{{display:flex;gap:13px;background:#0e1828;border:1px solid #1d2c44;border-radius:11px;padding:14px 16px;margin-bottom:10px}}
-.alert.critical{{border-left:4px solid #ff5a6e}}
-.alert.warn{{border-left:4px solid #ff9f43}}
-.alert-badge{{font-size:13px;white-space:nowrap;font-weight:600}}
-.alert-title{{font-weight:600;font-size:14px;margin-bottom:4px}}
-.alert-detail{{color:#a8bad6;font-size:12.5px;line-height:1.6}}
-.insight{{display:flex;gap:13px;background:#0e1828;border:1px solid #1d2c44;border-radius:11px;padding:14px 16px;margin-bottom:10px}}
-.insight-icon{{font-size:24px}}
-.insight-title{{font-weight:600;margin-bottom:4px}}
-.insight-body{{color:#a8bad6;font-size:12.5px;line-height:1.6}}
+.card h3{{font-size:20px;color:#cdd9ec;margin-bottom:14px;font-weight:600}}
+.mtd{{color:#8aa0c0;font-size:16px;margin-top:12px;line-height:1.7}}
+.stats{{display:grid;grid-template-columns:1fr 1fr;gap:14px}}
+.stat{{background:#0c1422;border:1px solid #1a2942;border-radius:12px;padding:15px 18px}}
+.stat-label{{color:#8aa0c0;font-size:15px}}
+.stat-value{{font-size:24px;font-weight:600;margin-top:6px;color:#dfe8f5}}
+.alert{{display:flex;gap:18px;background:#0e1828;border:1px solid #1d2c44;border-radius:14px;padding:20px 24px;margin-bottom:14px}}
+.alert.critical{{border-left:6px solid #ff5a6e}}
+.alert.warn{{border-left:6px solid #ff9f43}}
+.alert-badge{{font-size:19px;white-space:nowrap;font-weight:700}}
+.alert-title{{font-weight:600;font-size:20px;margin-bottom:7px}}
+.alert-detail{{color:#a8bad6;font-size:17px;line-height:1.7}}
+.insight{{display:flex;gap:18px;background:#0e1828;border:1px solid #1d2c44;border-radius:14px;padding:20px 24px;margin-bottom:14px}}
+.insight-icon{{font-size:34px}}
+.insight-title{{font-weight:600;font-size:20px;margin-bottom:7px}}
+.insight-body{{color:#a8bad6;font-size:17px;line-height:1.7}}
 ol.next{{list-style:none}}
-ol.next li{{background:#0e1828;border:1px solid #1d2c44;border-radius:11px;padding:13px 16px;margin-bottom:9px;font-size:13.5px;line-height:1.6;color:#d4deee}}
-.tag{{display:inline-block;background:#1c3157;color:#7fb0ff;font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px;margin-right:10px}}
-.dq{{background:#0e1828;border:1px dashed #2a3d5e;border-radius:12px;padding:14px 18px}}
-.dq ul{{margin-left:18px;color:#a8bad6;font-size:12.5px;line-height:1.85}}
-.divider{{text-align:center;margin:26px 0 6px;color:#46597d;font-size:13px;letter-spacing:2px}}
-footer{{text-align:center;color:#52668a;font-size:12px;margin-top:28px}}
+ol.next li{{background:#0e1828;border:1px solid #1d2c44;border-radius:14px;padding:19px 24px;margin-bottom:13px;font-size:19px;line-height:1.7;color:#d4deee}}
+.tag{{display:inline-block;background:#1c3157;color:#7fb0ff;font-size:16px;font-weight:600;padding:5px 13px;border-radius:8px;margin-right:14px}}
+.dq{{background:#0e1828;border:1px dashed #2a3d5e;border-radius:16px;padding:22px 28px}}
+.dq ul{{margin-left:24px;color:#a8bad6;font-size:17px;line-height:2}}
+.divider{{text-align:center;margin:38px 0 10px;color:#46597d;font-size:18px;letter-spacing:3px}}
+footer{{text-align:center;color:#52668a;font-size:16px;margin-top:42px}}
 </style></head><body><div class="wrap">
 <header>
   <div><h1>{store} · 周报经营决策看板</h1>
@@ -451,31 +471,31 @@ footer{{text-align:center;color:#52668a;font-size:12px;margin-top:28px}}
 <div class="kpis">{kpis}</div>
 
 <div class="row r-2-1">
-  <div class="card"><h3>营收趋势 × 折扣率</h3><div id="trend" style="height:320px"></div></div>
-  <div class="card"><h3>收入结构<span class="section-tag">{n_present} 日口径</span></h3><div id="pie" style="height:250px"></div>
+  <div class="card"><h3>营收趋势 × 折扣率</h3><div id="trend" style="height:400px"></div></div>
+  <div class="card"><h3>收入结构<span class="section-tag">{n_present} 日口径</span></h3><div id="pie" style="height:320px"></div>
     <div class="mtd">{mtd_line}</div></div>
 </div>
 
 <div class="row r-1-1-1">
-  <div class="card"><h3>客单价趋势</h3><div id="ticket" style="height:230px"></div></div>
-  <div class="card"><h3>渠道收入对比<span class="section-tag">{n_present} 日</span></h3><div id="chan" style="height:230px"></div></div>
-  <div class="card"><h3>客流 × 烤鸭</h3><div id="multi" style="height:230px"></div></div>
+  <div class="card"><h3>客单价趋势</h3><div id="ticket" style="height:300px"></div></div>
+  <div class="card"><h3>渠道收入对比<span class="section-tag">{n_present} 日</span></h3><div id="chan" style="height:300px"></div></div>
+  <div class="card"><h3>客流 × 烤鸭</h3><div id="multi" style="height:300px"></div></div>
 </div>
 
 <div class="row r-1-1">
-  <div class="card"><h3>关键品类销量 TOP<span class="section-tag">{n_present} 日累计</span></h3><div id="catbar" style="height:300px"></div></div>
+  <div class="card"><h3>关键品类销量 TOP<span class="section-tag">{n_present} 日累计</span></h3><div id="catbar" style="height:380px"></div></div>
   <div class="card"><h3>会员与活动<span class="section-tag">{n_present} 日</span></h3><div class="stats">{member_html}</div></div>
 </div>
 
 <div class="row r-1-1">
   <div class="card"><h3>烤鸭专项分析<span class="section-tag">{n_present} 日</span></h3><div class="stats">{duck_html}</div></div>
-  <div class="card"><h3>工作日 vs 周末<span class="section-tag">7 天</span></h3><div id="wdwe" style="height:230px"></div></div>
+  <div class="card"><h3>工作日 vs 周末<span class="section-tag">7 天</span></h3><div id="wdwe" style="height:300px"></div></div>
 </div>
 
 <div class="divider">───────── 下半 · 管理诊断 ─────────</div>
 
 <h2 class="diag">本周经营判断</h2>
-<div class="verdict" style="margin-bottom:14px">{verdict}</div>
+<div class="verdict" style="margin-bottom:18px">{verdict}</div>
 
 <h2 class="diag">风险预警</h2>
 {alert_html}
@@ -493,53 +513,119 @@ footer{{text-align:center;color:#52668a;font-size:12px;margin-top:28px}}
 </div>
 <script>
 const cats={json.dumps(cats, ensure_ascii=False)};
-const axisLabel={{color:'#8aa0c0',fontSize:11}};
+const axisLabel={{color:'#8aa0c0',fontSize:14}};
 const splitLine={{lineStyle:{{color:'#16243c'}}}};
-function I(id){{return echarts.init(document.getElementById(id));}}
+function I(id){{return echarts.init(document.getElementById(id),null,{{devicePixelRatio:3}});}}
 
-I('trend').setOption({{tooltip:{{trigger:'axis'}},legend:{{data:['营业额','折扣率'],textStyle:{{color:'#cdd9ec'}}}},
- grid:{{left:58,right:55,top:38,bottom:46}},xAxis:{{type:'category',data:cats,axisLabel}},
+I('trend').setOption({{tooltip:{{trigger:'axis'}},legend:{{data:['营业额','折扣率'],textStyle:{{color:'#cdd9ec',fontSize:15}}}},
+ grid:{{left:70,right:64,top:46,bottom:54}},xAxis:{{type:'category',data:cats,axisLabel}},
  yAxis:[{{type:'value',name:'元',axisLabel,splitLine}},{{type:'value',name:'%',min:30,max:50,axisLabel,splitLine:{{show:false}}}}],
  series:[{{name:'营业额',type:'bar',data:{json.dumps(rev_series)},itemStyle:{{color:'#5b8cff'}},barWidth:'42%'}},
  {{name:'折扣率',type:'line',yAxisIndex:1,data:{json.dumps(disc_series)},smooth:true,lineStyle:{{color:'#ff9f43',width:3}},itemStyle:{{color:'#ff9f43'}}}}]}});
 
 I('pie').setOption({{tooltip:{{trigger:'item',formatter:'{{b}}: ¥{{c}} ({{d}}%)'}},
- legend:{{orient:'vertical',right:6,top:'center',textStyle:{{color:'#cdd9ec',fontSize:12}}}},
+ legend:{{orient:'vertical',right:6,top:'center',textStyle:{{color:'#cdd9ec',fontSize:15}}}},
  series:[{{type:'pie',radius:['40%','68%'],center:['34%','52%'],
  data:{json.dumps(pie_data, ensure_ascii=False)},
  label:{{show:false}},itemStyle:{{borderColor:'#0e1828',borderWidth:2}},
  color:['#5b8cff','#37d4a0','#ffd24a','#c77dff']}}]}});
 
-I('ticket').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:48,right:18,top:24,bottom:40}},
+I('ticket').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:58,right:22,top:30,bottom:48}},
  xAxis:{{type:'category',data:cats,axisLabel}},yAxis:{{type:'value',name:'元',axisLabel,splitLine}},
  series:[{{type:'line',data:{json.dumps(ticket_series)},smooth:true,areaStyle:{{color:'rgba(55,212,160,.15)'}},lineStyle:{{color:'#37d4a0',width:3}},itemStyle:{{color:'#37d4a0'}}}}]}});
 
-I('chan').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:70,right:24,top:18,bottom:34}},
+I('chan').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:84,right:30,top:22,bottom:42}},
  xAxis:{{type:'value',axisLabel,splitLine}},yAxis:{{type:'category',data:{json.dumps(chan_names, ensure_ascii=False)},axisLabel}},
  series:[{{type:'bar',data:{json.dumps(chan_vals)},barWidth:'55%',itemStyle:{{color:'#5cc8ff'}},
- label:{{show:true,position:'right',color:'#cdd9ec',fontSize:11,formatter:'¥{{c}}'}}}}]}});
+ label:{{show:true,position:'right',color:'#cdd9ec',fontSize:14,formatter:'¥{{c}}'}}}}]}});
 
-I('multi').setOption({{tooltip:{{trigger:'axis'}},legend:{{data:['客流','烤鸭'],textStyle:{{color:'#cdd9ec'}}}},
- grid:{{left:44,right:40,top:30,bottom:40}},xAxis:{{type:'category',data:cats,axisLabel}},
+I('multi').setOption({{tooltip:{{trigger:'axis'}},legend:{{data:['客流','烤鸭'],textStyle:{{color:'#cdd9ec',fontSize:15}}}},
+ grid:{{left:54,right:48,top:38,bottom:48}},xAxis:{{type:'category',data:cats,axisLabel}},
  yAxis:[{{type:'value',axisLabel,splitLine}},{{type:'value',axisLabel,splitLine:{{show:false}}}}],
  series:[{{name:'客流',type:'bar',data:{json.dumps(cust_series)},itemStyle:{{color:'#37d4a0'}},barWidth:'46%'}},
  {{name:'烤鸭',type:'line',yAxisIndex:1,data:{json.dumps([round(d['duck'],1) for d in days])},smooth:true,lineStyle:{{color:'#ffd24a',width:3}},itemStyle:{{color:'#ffd24a'}}}}]}});
 
-I('catbar').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:78,right:40,top:14,bottom:30}},
+I('catbar').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:96,right:50,top:18,bottom:38}},
  xAxis:{{type:'value',axisLabel,splitLine}},yAxis:{{type:'category',data:{json.dumps(cat_names, ensure_ascii=False)},inverse:true,axisLabel}},
  series:[{{type:'bar',data:{json.dumps(cat_vals)},barWidth:'58%',itemStyle:{{color:'#5cc8ff'}},
- label:{{show:true,position:'right',color:'#cdd9ec',fontSize:11}}}}]}});
+ label:{{show:true,position:'right',color:'#cdd9ec',fontSize:14}}}}]}});
 
-I('wdwe').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:62,right:24,top:24,bottom:34}},
+I('wdwe').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:76,right:30,top:30,bottom:42}},
  xAxis:{{type:'category',data:['工作日日均','周末日均'],axisLabel}},yAxis:{{type:'value',name:'元',axisLabel,splitLine}},
  series:[{{type:'bar',data:[{{value:{round(h['wd_avg'],0)},itemStyle:{{color:'#41557a'}}}},{{value:{round(h['we_avg'],0)},itemStyle:{{color:'#5b8cff'}}}}],
- barWidth:'46%',label:{{show:true,position:'top',color:'#cdd9ec',formatter:'¥{{c}}'}}}}]}});
+ barWidth:'46%',label:{{show:true,position:'top',color:'#cdd9ec',fontSize:15,formatter:'¥{{c}}'}}}}]}});
+
+// 长图导出测高 hook：图表高度固定，scrollHeight 稳定，供 Chrome 两遍法读取
+function _markH(){{document.documentElement.setAttribute('data-page-h',document.documentElement.scrollHeight);}}
+window.addEventListener('load',function(){{_markH();setTimeout(_markH,600);}});
 </script></body></html>"""
 
 
-# ============================ PNG 渲染（PIL，无浏览器依赖） ============================
-# 飞书自动推送需要 PNG，但 launchd 自动化环境无 headless 浏览器，
-# 因此用 Pillow 直接绘制融合版看板（经营大屏 + 管理诊断），与 HTML 同口径同数据。
+# ============================ 高清长图导出（Chrome 两遍法，默认标准） ============================
+# 第一遍 --dump-dom 读取页面真实 scrollHeight，第二遍 --window-size=宽,高 + scale 截全页长图。
+# 与 HTML 完全同源（同一份 ECharts 渲染），不压缩、不裁切、不依赖浏览器手动缩放。
+
+_CHROME_CANDIDATES = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+]
+
+
+def _find_chrome():
+    import shutil
+    for p in _CHROME_CANDIDATES:
+        if os.path.exists(p):
+            return p
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome"):
+        p = shutil.which(name)
+        if p:
+            return p
+    return None
+
+
+def export_png_via_chrome(html_path, png_path, width=1600, scale=2, max_height=24000):
+    """用本机 Chrome/Chromium 把长图 HTML 导出为高清全页长图 PNG。"""
+    import re
+    import subprocess
+
+    chrome = _find_chrome()
+    if not chrome:
+        raise RuntimeError("未找到 Chrome/Chromium，无法导出高清长图 PNG")
+
+    url = "file://" + os.path.abspath(html_path)
+    base = [chrome, "--headless", "--disable-gpu", "--hide-scrollbars",
+            "--no-sandbox", "--disable-dev-shm-usage", "--default-background-color=00000000"]
+
+    # 第一遍：量真实页面高度（图表容器高度固定，scrollHeight 稳定）
+    measure = subprocess.run(
+        base + ["--virtual-time-budget=12000", "--dump-dom", url],
+        capture_output=True, text=True, timeout=120)
+    m = re.search(r'data-page-h="(\d+)"', measure.stdout)
+    height = int(m.group(1)) if m else 0
+    if height <= 0:
+        height = 6400  # 兜底高度，避免测高失败时截不全
+    height = min(height + 48, max_height)  # 底部留白，防裁切
+
+    # 第二遍：按真实高度截全页长图（deviceScaleFactor=scale → 高清不压缩）
+    abs_png = os.path.abspath(png_path)
+    if os.path.exists(abs_png):
+        os.remove(abs_png)
+    subprocess.run(
+        base + [f"--force-device-scale-factor={scale}",
+                f"--window-size={width},{height}",
+                "--virtual-time-budget=14000",
+                f"--screenshot={abs_png}", url],
+        capture_output=True, text=True, timeout=180)
+    if not os.path.exists(abs_png):
+        raise RuntimeError("Chrome 截图未生成 PNG（可能网络无法加载 ECharts CDN 或页面渲染超时）")
+    return abs_png, width, height, scale
+
+
+# ============================ PNG 渲染（PIL 兜底，无浏览器依赖） ============================
+# 当本机没有 Chrome/Chromium 或截图失败时，退回 Pillow 直接绘制融合版看板，
+# 与 HTML 同口径同数据，保证主流程不因缺浏览器而中断。
 
 def _font(size):
     from PIL import ImageFont

@@ -372,24 +372,36 @@ python3 weekly_report.py --start 2026-05-20 --end 2026-05-26
 python3 weekly_report.py --days 14
 ```
 
-### 周报看板标准（2026-06-01 升级：经营大屏 + 管理诊断）
+### 周报看板标准（2026-06-01 升级：经营大屏 + 管理诊断 · 高清长图）
 
-自动周报的默认看板已升级为 **融合版“经营大屏 + 管理诊断”**，由 `scripts/render_manager_weekly_fusion.py` 生成 HTML，并截图成 PNG 推送飞书。
+自动周报的默认看板为 **融合版“经营大屏 + 管理诊断”**，由 `scripts/render_manager_weekly_fusion.py` 生成两份产物：
+
+- **完整 HTML**：用于本地归档和打开查看；按“长图导出画布”设计——固定 1600px 宽、不依赖浏览器缩放、正文字号大、模块间距足、底部不裁切。
+- **高清长图 PNG**：用于飞书群推送；由本机 Chrome/Chromium 无头模式整页截图（**两遍法**：先 `--dump-dom` 读取页面真实 `scrollHeight`，再按真实高度整页截图，不裁切、不压缩低清图）。
 
 模块包含：核心指标、营收趋势、收入结构、客单价、渠道收入、客流×烤鸭、关键品类、会员、烤鸭专项、风险预警、经营洞察、下周行动建议、数据质量说明。
 
+长图导出参数（默认）：
+- viewport 宽度：`--viewport-width 1600`（CSS px）
+- deviceScaleFactor：`--scale 2`（高清，可设 3；2026-05-25~31 实测输出 3200×9866）
+- 引擎：`--png-engine chrome`（默认）；本机无 Chrome 时自动退回 `pil` 兜底绘制，保证主流程不中断
+
 数据纪律：
 - 只读取真实日报数据（`data/store_history.csv` + `output/report_MLD_*.json`），不造数、不改历史数据。
-- 7 天完整窗口（history）与 5 天结构化窗口（report JSON）分别标注口径；缺失日期（如 2026-05-25 / 05-28）在看板上显式标注，不补全。
+- 7 天完整窗口（history）与结构明细窗口（report JSON）分别标注口径；缺失日期（如 2026-05-25 / 05-28）在 HTML 和 PNG 上均显式标注“结构明细 5/7 天”，不补全。
 
 Fallback：原 `skills/weekly_dashboard/` 基础看板保留为 fallback；融合版脚本不存在或生成失败时，`weekly_auto.py` 自动回退到基础看板。
 
 本地生成与推送命令：
 
 ```bash
-# 生成融合版 HTML + PNG（不推送）
+# 默认标准：生成长图画布 HTML + Chrome 高清长图 PNG（不推送）
 python3 scripts/render_manager_weekly_fusion.py \
   --store 便宜坊马连道 --start 2026-05-25 --end 2026-05-31
+
+# 自定义清晰度（scale 3 更高清）/ 视口宽度
+python3 scripts/render_manager_weekly_fusion.py \
+  --store 便宜坊马连道 --start 2026-05-25 --end 2026-05-31 --scale 3 --viewport-width 1600
 
 # 只生成 HTML（跳过 PNG）
 python3 scripts/render_manager_weekly_fusion.py \
@@ -402,7 +414,7 @@ python3 scripts/render_manager_weekly_fusion.py \
 
 输出路径：
 - `output/manager_weekly_fusion_便宜坊马连道_2026-05-25_2026-05-31.html`
-- `output/manager_weekly_fusion_便宜坊马连道_2026-05-25_2026-05-31.png`
+- `output/manager_weekly_fusion_便宜坊马连道_2026-05-25_2026-05-31.png`（高清长图，飞书推送用）
 
 ### 日志文件位置
 
