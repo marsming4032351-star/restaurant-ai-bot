@@ -28,6 +28,13 @@ REPORT_DIR = os.path.join(ROOT, "output")
 OUT_DIR = os.path.join(ROOT, "output")
 STORE_ID = "MLD"
 
+# 周报标准 V1（已固定，勿随意改动）：经营大屏 + 管理诊断 长图版
+# HTML 固定 1600px 长图画布；PNG 由 Chrome 无头整页截图导出，保持高清不裁切。
+STANDARD_VERSION = "V1"
+STANDARD_VIEWPORT_WIDTH = 1600   # 长图导出视口宽度（CSS px）
+STANDARD_SCALE = 2               # deviceScaleFactor（高清不压缩）
+STANDARD_PNG_ENGINE = "chrome"   # 默认引擎；本机无 Chrome 时自动退回 pil 兜底
+
 WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
 
@@ -231,10 +238,12 @@ def main():
     ap.add_argument("--start", default="2026-05-25")
     ap.add_argument("--end", default="2026-05-31")
     ap.add_argument("--no-png", action="store_true", help="只生成 HTML，不导出长图 PNG")
-    ap.add_argument("--viewport-width", type=int, default=1600, help="长图导出视口宽度（CSS px），默认 1600")
-    ap.add_argument("--scale", type=int, default=2, help="长图导出 deviceScaleFactor，默认 2（高清，可设 3）")
-    ap.add_argument("--png-engine", choices=["chrome", "pil"], default="chrome",
-                    help="PNG 导出引擎：chrome=HTML 高清长图（默认）；pil=无浏览器兜底绘制")
+    ap.add_argument("--viewport-width", type=int, default=STANDARD_VIEWPORT_WIDTH,
+                    help=f"长图导出视口宽度（CSS px），标准 V1={STANDARD_VIEWPORT_WIDTH}")
+    ap.add_argument("--scale", type=int, default=STANDARD_SCALE,
+                    help=f"长图导出 deviceScaleFactor，标准 V1={STANDARD_SCALE}（高清，可设 3）")
+    ap.add_argument("--png-engine", choices=["chrome", "pil"], default=STANDARD_PNG_ENGINE,
+                    help="PNG 导出引擎：chrome=HTML 高清长图（标准 V1）；pil=无浏览器兜底绘制")
     ap.add_argument("--send-to-feishu", action="store_true",
                     help="PNG 生成成功后推送到飞书；缺凭证或 PNG 缺失时跳过，不输出敏感信息")
     args = ap.parse_args()

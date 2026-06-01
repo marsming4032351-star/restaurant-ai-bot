@@ -5,7 +5,7 @@ description: Generate an ECharts-style weekly restaurant operations dashboard fr
 
 # 周报可视化看板 Skill
 
-> ⚠️ **周报默认标准已升级（2026-06-01）**：自动周报现在默认生成 **融合版“经营大屏 + 管理诊断”高清长图看板**（`scripts/render_manager_weekly_fusion.py`）：先生成固定 1600px 宽的「长图导出画布」HTML，再用本机 Chrome 无头两遍法整页截图成高清长图 PNG（默认 viewport 1600 / deviceScaleFactor 2）推送飞书。本 skill 现在是 **fallback**——当融合版脚本不存在、本机无 Chrome 且 PIL 兜底也失败时，`weekly_auto.py` 才回退到这里。手动单独生成基础看板仍可使用本 skill。
+> ⚠️ **周报默认标准已固定为 V1（2026-06-01）**：自动周报默认生成 **融合版“经营大屏 + 管理诊断”高清长图看板**（结构与导出参数已锁定，不再增加模块）（`scripts/render_manager_weekly_fusion.py`）：先生成固定 1600px 宽的「长图导出画布」HTML，再用本机 Chrome 无头两遍法整页截图成高清长图 PNG（默认 viewport 1600 / deviceScaleFactor 2）推送飞书。本 skill 现在是 **fallback**——当融合版脚本不存在、本机无 Chrome 且 PIL 兜底也失败时，`weekly_auto.py` 才回退到这里。手动单独生成基础看板仍可使用本 skill。
 
 ## 用途
 

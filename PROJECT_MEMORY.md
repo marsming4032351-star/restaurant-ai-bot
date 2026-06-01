@@ -397,3 +397,51 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 ```
 
 禁止记录任何真实 webhook、App Secret、token 或 `image_key`。
+
+---
+
+## 13. 2026-06-01 周报标准升级：经营大屏 + 管理诊断长图版（V1，已固定）
+
+周报默认看板标准已正式升级并**固定为 V1**：**“经营大屏 + 管理诊断”长图版**。
+
+### 标准定义（不再随意增删模块）
+
+- 入口脚本：`scripts/render_manager_weekly_fusion.py`
+- 产物 1：**完整 HTML**——固定 1600px 宽的「长图导出画布」，不依赖浏览器缩放，正文字号大、模块间距足、底部不裁切，用于本地归档和打开查看。
+- 产物 2：**高清长图 PNG**——由本机 Chrome 无头模式整页截图导出，用于飞书群推送。
+- 固定导出参数（脚本顶部常量 `STANDARD_*`，作为单一事实来源）：
+  - `STANDARD_VIEWPORT_WIDTH = 1600`
+  - `STANDARD_SCALE = 2`（deviceScaleFactor，高清不压缩）
+  - `STANDARD_PNG_ENGINE = "chrome"`
+- 固定模块（上半经营大屏 + 下半管理诊断）：核心指标 / 营收趋势×折扣率 / 收入结构 / 客单价 / 渠道收入 / 客流×烤鸭 / 关键品类 TOP / 会员 / 烤鸭专项 / 本周经营判断 / 风险预警 / 经营洞察 / 下周行动建议 / 数据质量说明。
+
+### 长图 PNG 导出机制（Chrome 两遍法）
+
+1. 第一遍 `--headless --dump-dom` 读取 HTML 末尾 `data-page-h`（页面真实 `scrollHeight`）；图表容器高度固定，scrollHeight 稳定。
+2. 第二遍 `--window-size=1600,<真实高度+留白> --force-device-scale-factor=2 --screenshot` 整页截图，不裁切、不压缩低清。
+3. Chrome 路径自动探测（`_find_chrome`：Google Chrome / Chromium / Edge）。本机无 Chrome 或截图失败时自动退回 PIL 兜底绘制（`--png-engine pil`），保证主流程不中断。
+4. ECharts 从 jsdelivr CDN 加载，截图需联网；离线则图表空白但 HTML 仍可归档。
+
+### 默认推送链路与 fallback
+
+- `weekly_auto.py._push_weekly_dashboard`：周一处理完周日日报触发周报时，**默认调用融合版长图脚本**生成 HTML+PNG；`.env` 配了 `FEISHU_APP_ID/SECRET` 时推送高清长图 PNG。
+- Fallback 顺序：融合版失败 → 退 PIL 兜底 PNG → 退原 `skills/weekly_dashboard/` 基础看板。原普通周报保留，不删除。
+
+### 数据纪律
+
+- 只读取真实日报数据（`data/store_history.csv` + `output/report_MLD_*.json`），不造数、不改历史数据。
+- 7 天完整窗口（history）与结构明细窗口（report JSON）分别标注口径；缺失日期（如 2026-05-25 / 05-28）在 HTML 和 PNG 上均显式标注“结构明细 5/7 天”，不补全、不插值。
+
+### 本地验证（2026-06-01，未推送飞书）
+
+- 区间 2026-05-25~05-31：HTML + 高清长图 PNG 生成成功。
+- PNG 实测尺寸 **3200 × 9866**（viewport 1600 / scale 2），整页无裁切，顶部图表→中部品类/会员/烤鸭→底部风险预警/洞察/下周建议/数据质量/footer 全部完整。
+- `python3 -m unittest test_weekly_auto.py` 9 个测试通过。
+
+### 默认生成命令
+
+```bash
+python3 scripts/render_manager_weekly_fusion.py \
+  --store 便宜坊马连道 --start 2026-05-25 --end 2026-05-31
+# 推送飞书：追加 --send-to-feishu；只要 HTML：追加 --no-png；更高清：--scale 3
+```
