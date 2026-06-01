@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
@@ -10,6 +12,7 @@ import config
 import weekly_report
 
 
+ROOT_DIR = Path(__file__).resolve().parent
 WEEKLY_STATE = config.DATA_DIR / "weekly_state.json"
 
 
@@ -62,6 +65,37 @@ def _default_push_weekly(payload: dict) -> None:
     analysis = weekly_report.analyze(stats)
     card = weekly_report.build_card(stats, analysis)
     weekly_report.push(card)
+    _push_weekly_dashboard(payload)
+
+
+def _push_weekly_dashboard(payload: dict) -> None:
+    dashboard_script = ROOT_DIR / "skills" / "weekly_dashboard" / "render_weekly_dashboard.py"
+    if not dashboard_script.exists():
+        print(f"[weekly-auto] 周报看板脚本不存在，跳过增强看板: {dashboard_script}")
+        return
+
+    cmd = [
+        sys.executable,
+        str(dashboard_script),
+        "--store",
+        payload["store_name"],
+        "--start-date",
+        payload["start_date"],
+        "--end-date",
+        payload["end_date"],
+    ]
+    if config.FEISHU_APP_ID and config.FEISHU_APP_SECRET:
+        cmd.append("--send-to-feishu")
+
+    try:
+        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if completed.returncode != 0:
+            raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "周报看板生成失败")
+        print(f"[weekly-auto] 增强看板已生成: {payload['start_date']}～{payload['end_date']}")
+        if config.FEISHU_APP_ID and config.FEISHU_APP_SECRET:
+            print(f"[weekly-auto] 增强看板已尝试发送到飞书: {payload['start_date']}～{payload['end_date']}")
+    except Exception as exc:
+        print(f"[weekly-auto] 增强看板失败: {type(exc).__name__}: {exc}")
 
 
 def check_and_push(

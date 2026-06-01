@@ -366,6 +366,12 @@ grep "目标日期" data/pipeline_log.csv
 
 看板默认只生成 HTML/PNG，不调用飞书。需要发送到飞书群时显式增加 `--send-to-feishu`；脚本会在 PNG 生成成功后复用现有 `feishu_bot` 推送标题、说明和看板图片，PNG 不存在或图片上传配置不可用时会报错中止，且不输出任何 `.env`、webhook、token 或 app secret。
 
+#### 2026-06-01 周报看板字段增强器
+
+`skills/weekly_dashboard/render_weekly_dashboard.py` 已新增 `weekly field enhancer`，优先读取 `output/report_*.json` 的日报结构化字段，再结合 `field_map.yaml` 和 `store_history.csv` 生成更完整的周经营看板。当前看板不仅展示营业额，还会展示经营结构、客流、客单价、会员活动、关键品类销量、烤鸭专项和底部经营诊断。
+
+字段缺失时系统会降级显示为 `暂无` 或直接隐藏模块，不会伪造数据，也不会修改历史业务日期。周一自动触发周报时，`weekly_auto.py` 会沿用这一版增强看板；如果本机配置了图片上传凭证，会尝试同步推送到飞书群。
+
 #### 2026-06-01 周报看板飞书图片推送经验
 
 本次 `2026-05-25` 到 `2026-05-31` 周报看板图片已成功推送到飞书。关键经验：

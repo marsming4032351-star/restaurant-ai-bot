@@ -203,6 +203,13 @@ tail -n 5 data/pipeline_log.csv
 
 `--send-to-feishu` 只在 PNG 成功生成后复用现有飞书推送逻辑发送标题、说明和看板图片；默认不推送，PNG 不存在时不允许发送，也不输出 `.env`、webhook、token 或 app secret。
 
+### 周报看板增强规则
+
+- 周报看板已经增加 `weekly field enhancer`，优先读取 `output/report_*.json` 的日报结构化字段，再结合 `field_map.yaml` 和 `store_history.csv` 构建周经营数据。
+- 字段缺失时会降级为 `暂无` 或隐藏模块，不会报错，也不会伪造数据。
+- 周一自动触发周报时会沿用增强版看板；如果 `.env` 中图片上传凭证可用，会尝试同步推送图片到飞书。
+- 本地生成和推送命令仍然保持 `skills/weekly_dashboard/render_weekly_dashboard.py --send-to-feishu`。
+
 ### 周报看板飞书图片推送经验
 
 - Claude/Codex 等智能体环境可能无法访问 Mac 本机代理 `127.0.0.1:7897`，带图片上传的飞书推送建议在 Mac 本机 Terminal 执行。

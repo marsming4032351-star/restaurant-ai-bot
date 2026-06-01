@@ -532,6 +532,36 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 - 不传 `--send-to-feishu` 时不调用飞书推送；PNG 不存在时不允许推送。
 - 推送过程不打印 `.env`、webhook、token、app secret 等敏感信息。
 
+### 周报看板字段增强器
+
+当前 `weekly_dashboard` 已升级为经营管理驾驶舱，而不是单纯的收入图。实现上增加了 `weekly field enhancer`：
+
+- 优先读取 `output/report_*.json` 中已经结构化保存的日报字段。
+- 结合 `field_map.yaml` 的字段映射，把日报中的原始经营字段翻译成看板指标。
+- 继续使用 `store_history.csv` 作为周报区间的基础骨架。
+- 字段缺失时显示 `暂无` 或直接隐藏模块，不会伪造数据。
+
+本地生成：
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31
+```
+
+推送飞书：
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31 \
+  --send-to-feishu
+```
+
+周一自动触发周报时也会沿用这一版增强看板。
+
 ### 飞书图片推送运行经验
 
 本次 `2026-05-25` 到 `2026-05-31` 周报可视化看板图片已成功推送到飞书。经验如下：

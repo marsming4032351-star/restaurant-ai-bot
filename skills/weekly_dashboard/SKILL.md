@@ -11,11 +11,14 @@ description: Generate an ECharts-style weekly restaurant operations dashboard fr
 
 该 skill 是“周报数据可视化增强层”，不改变现有日报/周报数据逻辑，不写入、不覆盖、不修正任何真实业务数据。
 
+当前版本新增 `weekly field enhancer`：优先读取 `output/report_*.json` 中的日报结构化字段，再结合 `field_map.yaml` 和 `store_history.csv`，生成更完整的经营管理看板。字段缺失时显示 `暂无` 或隐藏对应模块，不伪造数据。
+
 ## 输入
 
 - 门店名：例如 `便宜坊马连道`
 - 周报统计区间：`--start-date YYYY-MM-DD` 与 `--end-date YYYY-MM-DD`
-- 数据来源：默认读取 `data/store_history.csv`，也可通过 `--history-path` 指定
+- 数据来源优先级：`output/report_*.json` -> `field_map.yaml` -> `data/store_history.csv`
+- 其中 `store_history.csv` 仍然是周报骨架，`report_*.json` 提供更丰富的经营字段
 
 业务日期规则：
 - 日报 `business_date` 仍然只能来自图片表头日期。
@@ -28,6 +31,17 @@ description: Generate an ECharts-style weekly restaurant operations dashboard fr
 - `output/weekly_dashboard_<store_name>_<start_date>_<end_date>.png`
 
 看板默认 16:9 横版，深色科技感背景，蓝紫主色，适合飞书图片推送。
+
+默认看板模块包含：
+- 核心 KPI
+- 每日营业额 + 客流双轴趋势
+- 收入结构
+- 客单价趋势
+- 堂食 / 外卖 / 线上收入对比
+- 会员与活动
+- 关键品类销量 TOP
+- 烤鸭专项分析
+- 底部经营诊断
 
 ## 调用方式
 

@@ -459,6 +459,13 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 
 `skills/weekly_dashboard/` 是周报数据可视化增强层，只读取已验证过的周报数据，不改变现有日报/周报推送逻辑，也不修改 `store_history.csv`、`pipeline_log.csv` 或任何业务日期。
 
+当前版本新增了 `weekly field enhancer`：它会优先读取 `output/report_*.json` 中已经结构化保存的日报字段，再结合 `field_map.yaml` 的字段映射和 `store_history.csv` 的基础骨架，拼出周经营看板需要的数据。字段缺失时不会报错，UI 会显示 `暂无` 或直接隐藏对应模块。
+
+数据优先级：
+- `output/report_*.json` 的日报结构化字段
+- `field_map.yaml` 的字段映射
+- `store_history.csv` 的周报骨架字段
+
 运行方式：
 
 ```bash
@@ -485,6 +492,8 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 ```
 
 `--send-to-feishu` 会在 PNG 成功生成后复用项目现有飞书推送逻辑发送标题、说明和图片；PNG 不存在或图片上传配置不可用时会报错中止，不会打印 `.env`、webhook、token 或 app secret。
+
+周一自动触发周报时，`weekly_auto.py` 也会顺手生成并尝试推送这一版增强看板；如果本机已配置图片上传凭证，就会同步把看板图片发到飞书群。
 
 ### 周报看板飞书图片推送运行经验
 
