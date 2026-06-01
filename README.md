@@ -487,9 +487,36 @@ python3 weekly_report.py --last-week --dry-run   # 先干跑验证
 
 ---
 
+## 数据口径治理层（2026-06-01，为周报/月报/同比环比准备）
+
+把每天日报从「单日记录」升级为支撑**周报/月报/同比/环比/诊断**的「数据资产」。
+
+| 模块 | 职责 |
+|------|------|
+| `date_dimension.py` | 日期维度单一真相源：纯函数派生 business_year/month、自然周、is_workday/holiday、previous_*、MTD 窗口、跨月周覆盖 |
+| `data/holiday_calendar_cn.json` | 节假日/调休配置（config-driven，缺失按周末默认，不伪造） |
+| `daily_facts.py` | 富字段入库到新表 `data/daily_facts.csv`（不动 `store_history.csv`）；去重 + 污染防护 + 更正审计 |
+| `monthly_metrics.py` | 只读月度聚合：MTD、上月同期、环比 MoM、工作日/周末均、最高/最低/异常日 |
+
+**防污染要点：** 同 store+business_date 默认禁止覆盖；**截图表头日期≠business_date 硬阻止**（绝不把 05-31 写成 06-01）；`source_image_hash` 防重复截图；更正需 `amend+reason` 并自动备份+审计。
+
+**口径分层：** 营收语义 / 渠道结构 / 支付结构 / 折扣结构 是四套不同口径，不混用（详见 `docs/data_schema.md`）。
+
+入库为 `run_daily_report` 中 try/except 包裹的**附加层**，失败不影响日报主链路与周报标准 V1，可整体回退。完整规范见 [`docs/date_and_metric_policy.md`](docs/date_and_metric_policy.md)。
+
+```bash
+# 查看任意业务日期的日期维度派生
+python3 date_dimension.py 2026-06-01
+# 查看月度 MTD 指标（只读）
+python3 monthly_metrics.py 2026-06-01 便宜坊马连道
+```
+
+---
+
 ## 10. 后续开发计划
 
 - [ ] 标准化输入：支持 `daily/` 文件夹批量处理多日图片
+- [x] 数据口径治理：日期维度单一真相源 + 富字段数据资产入库（见下「数据口径治理层」）
 - [ ] 建立 `data_schema.json`：定义字段结构、类型、异常阈值
 - [ ] 异常规则引擎：同比跌 >15%、折扣率 >40%、套餐挂零等自动告警
 - [ ] 趋势分析：基于 `history.parquet` 做 7 日 / 30 日对比图

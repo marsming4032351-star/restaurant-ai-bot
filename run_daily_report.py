@@ -357,6 +357,87 @@ def after_daily_report_sent(store: str, report_date: str) -> dict:
     return weekly_auto.check_and_push(store, report_date)
 
 
+def _write_daily_facts_hook(
+    store: str,
+    business_date: str,
+    image_path: Path,
+    report_path: Path,
+    force: bool,
+) -> None:
+    """附加入库：把日报富字段写入 data/daily_facts.csv，并打印月度口径提示。
+
+    完全可回退、try/except 包裹：任何失败都不影响 V1 日报主流程与周报。
+    不改 store_history.csv、不推送飞书、不伪造数据。
+    """
+    try:
+        import json as _json
+
+        import daily_facts as _facts
+        from date_dimension import monthly_caliber_hint
+
+        report = {}
+        if report_path and Path(report_path).exists():
+            report = _json.loads(Path(report_path).read_text(encoding="utf-8"))
+        daily = report.get("daily", {}) or {}
+        rev = daily.get("revenue", {}) or {}
+        mc = daily.get("member_consumption", {}) or {}
+        tr = daily.get("traffic", {}) or {}
+        dv = daily.get("derived", {}) or {}
+
+        def g(d, k):
+            v = d.get(k)
+            return v if v not in (None, "") else ""
+
+        gross = g(rev, "revenue_today_before_discount")
+        net = g(rev, "revenue_today")
+        discount_amount = ""
+        if isinstance(gross, (int, float)) and isinstance(net, (int, float)):
+            discount_amount = round(gross - net, 2)
+
+        metrics = {
+            "gross_revenue": gross,
+            "net_revenue": net,
+            "actual_received": net,
+            "discount_amount": discount_amount,
+            "discount_rate": g(dv, "discount_rate"),
+            "member_recharge": g(rev, "member_recharge_today"),
+            "member_consumption": g(mc, "member_revenue"),
+            "coupon_amount": g(tr, "coupon_revenue"),
+            "groupbuy_amount": "",
+            "dine_in_revenue": g(rev, "dine_in_revenue"),
+            "takeaway_revenue": g(rev, "dine_in_takeaway_revenue"),
+            "online_revenue": g(rev, "online_takeaway_revenue"),
+            "member_revenue": g(mc, "member_revenue"),
+            "full_price_revenue": g(mc, "full_price_revenue"),
+            "discount_revenue": g(mc, "discount_revenue"),
+            "customer_count": g(tr, "customer_count"),
+            "avg_check": g(tr, "avg_check"),
+            "roast_duck_sales": g(dv, "duck_total"),
+        }
+        source = {
+            "source_image_filename": Path(image_path).name,
+            "source_image_hash": _facts.compute_image_hash(image_path),
+            "source_image_header_date": business_date,
+            "vlm_confidence": "",
+            "vlm_model_name": getattr(config, "VISION_MODEL", "") or "",
+        }
+        record = _facts.build_fact_record(business_date, store, metrics=metrics, source=source)
+        mode = "amend" if force else "append"
+        reason = "--force 重跑更正" if force else ""
+        # 以 config.DATA_DIR 为基准解析路径，保证测试 patch DATA_DIR 时不污染真实 data/
+        data_dir = Path(getattr(config, "DATA_DIR", _facts.DATA_DIR))
+        facts_csv = data_dir / "daily_facts.csv"
+        _facts.FACTS_AUDIT_PATH = data_dir / "daily_facts_audit.csv"
+        _facts.FACTS_BACKUP_PATH = data_dir / "daily_facts_backup.csv"
+        result = _facts.save_fact(record, mode=mode, reason=reason, path=facts_csv)
+        print(f"[facts] daily_facts 入库: {result['status']}")
+        for w in result.get("warnings", []):
+            print(f"[facts] {w}", file=sys.stderr)
+        print(f"[facts] {monthly_caliber_hint(business_date)}")
+    except Exception as facts_exc:  # 附加层失败绝不影响主流程
+        print(f"[facts] 富字段入库跳过(非致命): {type(facts_exc).__name__}: {facts_exc}", file=sys.stderr)
+
+
 def run_daily_report(args: argparse.Namespace) -> int:
     read_startup_context()
     input_folder = Path(getattr(args, "input_folder", INPUT_DIR))
@@ -401,6 +482,7 @@ def run_daily_report(args: argparse.Namespace) -> int:
         import main as daily_main
 
         daily_main.run(None, args.store_id, excel_path, args_ns=SimpleNamespace(force=args.force))
+        _write_daily_facts_hook(args.store, business_date, image_path, report_path, args.force)
         write_pipeline_state(PIPELINE_STATE, args.store, business_date, timestamp)
         append_pipeline_log(
             PIPELINE_LOG,

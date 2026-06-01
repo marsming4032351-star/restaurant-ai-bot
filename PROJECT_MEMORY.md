@@ -445,3 +445,22 @@ python3 scripts/render_manager_weekly_fusion.py \
   --store 便宜坊马连道 --start 2026-05-25 --end 2026-05-31
 # 推送飞书：追加 --send-to-feishu；只要 HTML：追加 --no-png；更高清：--scale 3
 ```
+
+## 14. 2026-06-01 数据口径治理：日报升级为「数据资产」
+
+**Why:** 6 月起要做月报、同比、环比。日报不能只是单日记录，必须带齐日期维度、对比基准、来源版本，且严防日期污染。
+
+**How to apply:**
+- 日期维度单一真相源 `date_dimension.py`（纯函数派生：business_year/month、自然周、is_workday/holiday、previous_*、MTD 窗口、跨月周）。节假日来自 `data/holiday_calendar_cn.json`（config-driven，不硬编码、不推农历，缺失按周末默认）。
+- 富字段入库到**新表** `data/daily_facts.csv`（`daily_facts.py`），**绝不动 `store_history.csv`**，不影响周报标准 V1。字段口径分四层（营收语义/渠道结构/支付结构/折扣结构），不混用。
+- 入库防污染：同 store+business_date 默认禁止覆盖（`blocked_duplicate`）；**截图表头日期≠business_date → 硬阻止**（绝不把 05-31 写成 06-01）；`source_image_hash` 命中其它日期告警；与前一天关键指标全等告警；更正需 `mode='amend'+reason`，旧记录备份到 `daily_facts_backup.csv` + 审计 `daily_facts_audit.csv`。
+- 月度只读聚合 `monthly_metrics.py`：MTD 累计、上月同期（缺日取上月末，如 3/31→2/28）、环比 MoM、工作日/周末均、最高/最低/异常日。缺失日期不补全、不伪造。
+- 集成：`run_daily_report._write_daily_facts_hook` 在日报成功后附加入库 + 打印月度口径提示；**try/except 包裹**，失败不影响 V1 主流程，可整体回退。入库路径以 `config.DATA_DIR` 为准（测试隔离，不污染真实 data/）。
+
+**MTD 数学验证：** 2026-06-01 → MTD=06-01~06-01、上月同期=05-01~05-01、上周同星期=05-25、week=06-01~06-07（周一）；2026-03-31 上月同期夹到 2026-02-28。
+
+**边界（req 15）：** 本次只改代码与文档，不改历史业务数据、不伪造 6 月数据、不推送飞书、不生成正式日报、不影响 V1，可回退。
+
+**文档：** `docs/date_and_metric_policy.md`、`docs/data_schema.md`。
+
+**注意（已知遗留）：** `store_history.csv` 仍有一条 2026-06-01 行（= 05-31 的旧污染重复，本任务不修改历史数据故保留）。明天真实 06-01 日报入主链路时，现有 `store_history_has_row` 守卫会因该行而拦截，需要 `--force` 或先由用户处理该污染行——属于既有数据问题，不在本次代码改造范围。

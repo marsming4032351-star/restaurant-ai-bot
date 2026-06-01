@@ -49,6 +49,14 @@ ls -la data/store_history.csv .env
 - 处理日期 `2026-06-01` 只记录为 `processing_date`；`date_validation_status=warning_processing_date_differs`。
 - 周报已自动触发，区间 `2026-05-25` 到 `2026-05-31`，7 天完整，缺失日期无，`date_check_status=complete`。
 
+### 数据口径治理层（2026-06-01 新增）
+
+- 日期维度单一真相源 `date_dimension.py`（纯函数派生，禁止 `date.today()` 临时推断）；节假日见 `data/holiday_calendar_cn.json`（config-driven）。
+- 富字段入库新表 `data/daily_facts.csv`（`daily_facts.py`），**不动 `store_history.csv`**，不影响周报标准 V1。
+- 防污染：同 store+business_date 默认禁覆盖；表头日期≠business_date 硬阻止（绝不把 05-31 写成 06-01）；`source_image_hash` 防重复截图；更正需 `amend+reason`+备份+审计。
+- 月度只读聚合 `monthly_metrics.py`（MTD/上月同期/环比/工作日周末拆分）。
+- 详见 `docs/date_and_metric_policy.md`、`docs/data_schema.md`。入库为 try/except 附加层，失败不影响 V1，可回退。
+
 ---
 
 ## 用户发来日报截图时的完整流程

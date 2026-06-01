@@ -89,3 +89,4 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 - 不传 `--send-to-feishu` 时只生成 HTML/PNG，不调用飞书推送。
 - 传 `--send-to-feishu` 时必须先成功生成 PNG；PNG 不存在时中止推送。
 - 不打印 `.env`、webhook、token、app secret 等敏感信息。
+- 日期口径单一真相源为 `date_dimension.py`（2026-06-01 新增）：周报/月报/看板的日期维度（自然周、MTD、跨月周、上月同期等）应优先取该模块派生值，不要用 `date.today()` 临时推断。跨月周由 `week_month_coverage` 标注，周统计按自然周、月统计按 `business_month`，不混用。详见 `docs/date_and_metric_policy.md`、`docs/data_schema.md`。

@@ -53,6 +53,15 @@ ls -la data/store_history.csv .env
 - 同一个自然周周期只推送一次，通过 `data/weekly_state.json` 防重复
 - 周报统计以 `data/store_history.csv` 中真实存在的日报日期为准
 
+### 数据口径治理层（2026-06-01 新增，为周报/月报/同比环比准备）
+
+- 日报已从「单日记录」升级为「数据资产」。日期维度统一由 `date_dimension.py` 派生（单一真相源），不允许各处用 `date.today()` 临时推断。
+- 富字段入库到新表 `data/daily_facts.csv`（`daily_facts.py`），**不动 `store_history.csv`**，不影响周报标准 V1。
+- 入库防污染：同 store+business_date 默认禁止覆盖；表头日期≠business_date 硬阻止（绝不把 05-31 截图写成 06-01）；`source_image_hash` 防重复截图；更正需 `mode='amend'+reason`，自动备份+审计。
+- 月度只读聚合见 `monthly_metrics.py`（MTD、上月同期、环比、工作日/周末拆分）。
+- 详见 `docs/date_and_metric_policy.md` 与 `docs/data_schema.md`。
+- 入库为 try/except 包裹的附加层，失败不影响 V1 日报主流程，可整体回退。
+
 ### 2026-06-01 真实流程验证结论
 
 - 项目已从“能识别日报”升级为“能防止日期污染历史数据，并能在周一收到周日数据后自动触发上周周报”。
