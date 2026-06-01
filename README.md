@@ -185,6 +185,13 @@ git push
 5. 在群里把这个机器人加进来
 6. 「凭证与基础信息」→ 复制 App ID 和 App Secret
 
+这两个值不要写进代码里，而是写入项目根目录的 `.env`，对应变量名分别是：
+
+```env
+FEISHU_APP_ID=你的 App ID
+FEISHU_APP_SECRET=你的 App Secret
+```
+
 ---
 
 ## 5. 配置 .env
