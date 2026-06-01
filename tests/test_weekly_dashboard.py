@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 
 MODULE_PATH = Path("skills/weekly_dashboard/render_weekly_dashboard.py")
 
@@ -106,6 +108,49 @@ class WeeklyDashboardTests(unittest.TestCase):
             html_text = Path(result["html_path"]).read_text(encoding="utf-8")
             self.assertIn("缺失日期提示：2026-05-28", html_text)
             self.assertNotIn("2026-05-28 summary", html_text)
+
+    def test_png_width_is_fixed_and_height_expands_for_long_diagnosis(self):
+        dashboard = load_dashboard_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            history_path = base / "store_history.csv"
+            write_history(history_path, [f"2026-05-{day:02d}" for day in range(25, 32)])
+
+            short_output = base / "short"
+            short_result = dashboard.render_dashboard(
+                store="便宜坊马连道",
+                start_date="2026-05-25",
+                end_date="2026-05-31",
+                history_path=history_path,
+                output_dir=short_output,
+            )
+            with Image.open(short_result["png_path"]) as img:
+                short_size = img.size
+
+            long_output = base / "long"
+            long_piece = "这是一段非常长的经营诊断文本，用来验证长图会随着底部内容自动增高，确保中文换行后仍然完整显示且不会裁切。"
+            long_lines = [
+                long_piece * 4,
+                long_piece * 4,
+                long_piece * 4,
+                long_piece * 4,
+                long_piece * 4,
+            ]
+            with patch.object(dashboard, "build_weekly_diagnosis", return_value=long_lines):
+                long_result = dashboard.render_dashboard(
+                    store="便宜坊马连道",
+                    start_date="2026-05-25",
+                    end_date="2026-05-31",
+                    history_path=history_path,
+                    output_dir=long_output,
+                )
+            with Image.open(long_result["png_path"]) as img:
+                long_size = img.size
+
+            self.assertEqual(short_size[0], 1920)
+            self.assertEqual(long_size[0], 1920)
+            self.assertGreaterEqual(short_size[1], 1080)
+            self.assertGreater(long_size[1], short_size[1])
 
     def test_send_to_feishu_uses_existing_helpers(self):
         dashboard = load_dashboard_module()

@@ -24,9 +24,16 @@ import weekly_report
 import yaml
 
 
-WIDTH = 1600
-HEIGHT = 900
+WIDTH = 1920
+HEIGHT = 1080
 FIELD_MAP_PATH = ROOT_DIR / "field_map.yaml"
+LEFT_MARGIN = 56
+RIGHT_MARGIN = 56
+TOP_MARGIN = 28
+BOTTOM_MARGIN = 34
+SECTION_GAP = 14
+ROW_GAP = 18
+MIN_PNG_HEIGHT = 1080
 
 
 @lru_cache(maxsize=1)
@@ -44,6 +51,106 @@ def parse_date(value: str | None, field_name: str) -> date:
 
 def safe_name(value: str) -> str:
     return re.sub(r"[\\/:*?\"<>|\\s]+", "_", value.strip())
+
+
+def _measure_text(draw, text: str, font) -> tuple[int, int]:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    return bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+
+def _text_width(draw, text: str, font) -> int:
+    return _measure_text(draw, text, font)[0]
+
+
+def _fit_text(draw, text: str, font, max_width: int) -> str:
+    if _text_width(draw, text, font) <= max_width:
+        return text
+    ellipsis = "…"
+    if _text_width(draw, ellipsis, font) > max_width:
+        return ""
+    left, right = 0, len(text)
+    while left < right:
+        mid = (left + right) // 2
+        candidate = text[:mid].rstrip() + ellipsis
+        if _text_width(draw, candidate, font) <= max_width:
+            left = mid + 1
+        else:
+            right = mid
+    candidate = text[: max(0, left - 1)].rstrip() + ellipsis
+    return candidate if candidate != ellipsis else ellipsis
+
+
+def _wrap_text(draw, text: str, font, max_width: int, max_lines: int | None = None) -> list[str]:
+    if not text:
+        return [""]
+    lines: list[str] = []
+    current = ""
+    for char in text:
+        candidate = current + char
+        if _text_width(draw, candidate, font) <= max_width or not current:
+            current = candidate
+            continue
+        lines.append(current)
+        current = char
+        if max_lines and len(lines) >= max_lines - 1:
+            break
+    if current:
+        lines.append(current)
+    if max_lines and len(lines) > max_lines:
+        lines = lines[:max_lines]
+    if max_lines and lines:
+        # Ensure the final line is visually contained if truncation happened.
+        if len(lines) == max_lines and _text_width(draw, lines[-1], font) > max_width:
+            lines[-1] = _fit_text(draw, lines[-1], font, max_width)
+    return lines
+
+
+def _panel_height(item_count: int, row_height: int, *, title_height: int = 24, top_padding: int = 12, bottom_padding: int = 14) -> int:
+    return top_padding + title_height + max(item_count, 1) * row_height + bottom_padding
+
+
+def _estimate_diagnosis_height(context: dict, draw, font) -> int:
+    max_width = WIDTH - LEFT_MARGIN * 2 - 36
+    line_height = 24
+    title_height = 24
+    total_lines = 0
+    diagnosis = context.get("diagnosis", []) or []
+    for idx, item in enumerate(diagnosis):
+        wrapped = _wrap_text(draw, item, font, max_width)
+        total_lines += max(1, len(wrapped))
+        if idx:
+            total_lines += 1
+    return title_height + 14 + total_lines * line_height + 16
+
+
+def _estimate_png_height(context: dict) -> int:
+    from PIL import Image, ImageDraw
+
+    canvas = Image.new("RGB", (WIDTH, 2000), "#08111f")
+    draw = ImageDraw.Draw(canvas)
+    text_font = _font(18)
+    small_font = _font(14)
+    title_font = _font(34)
+
+    y = TOP_MARGIN + _measure_text(draw, "标题", title_font)[1] + 8
+    if context.get("missing_dates"):
+        y += 58
+
+    y += 92 + 20
+
+    top_panel_h = 280
+    middle_panel_h = 220
+    bottom_panel_h = max(
+        _panel_height(len(context.get("enriched", {}).get("top_categories", {}) or {}), 26),
+        _panel_height(len((_build_chart_data(context).get("duck", {}) or {})), 32),
+    )
+    diagnosis_h = _estimate_diagnosis_height(context, draw, small_font)
+
+    y += top_panel_h + SECTION_GAP
+    y += middle_panel_h + SECTION_GAP
+    y += bottom_panel_h + SECTION_GAP
+    y += diagnosis_h + BOTTOM_MARGIN
+    return max(MIN_PNG_HEIGHT, int(math.ceil(y)))
 
 
 def output_paths(store: str, start: date, end: date, output_dir: Path) -> tuple[Path, Path]:
@@ -713,7 +820,8 @@ def echarts_option(context: dict) -> dict:
     }
 
 
-def render_html(context: dict, html_path: Path) -> Path:
+def render_html(context: dict, html_path: Path, canvas_height: int | None = None) -> Path:
+    canvas_height = canvas_height or _estimate_png_height(context)
     title = html.escape(context["title"])
     missing = "、".join(context["missing_dates"]) if context["missing_dates"] else "无"
     stats = context["stats"]
@@ -749,8 +857,8 @@ def render_html(context: dict, html_path: Path) -> Path:
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <style>
     * {{ box-sizing: border-box; }}
-    body {{ margin:0; width:{WIDTH}px; height:{HEIGHT}px; background:#08111f; color:#eaf4ff; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }}
-    .screen {{ width:{WIDTH}px; height:{HEIGHT}px; padding:28px 34px; background:radial-gradient(circle at top,#182f66 0,#08111f 44%,#050914 100%); }}
+    body {{ margin:0; width:{WIDTH}px; min-height:{canvas_height}px; height:auto; background:#08111f; color:#eaf4ff; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; }}
+    .screen {{ width:{WIDTH}px; min-height:{canvas_height}px; height:auto; padding:28px 34px 36px; background:radial-gradient(circle at top,#182f66 0,#08111f 44%,#050914 100%); }}
     .header {{ display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:18px; }}
     h1 {{ margin:0; font-size:34px; letter-spacing:0; }}
     .sub {{ color:#90a8d8; font-size:16px; }}
@@ -907,7 +1015,8 @@ def render_png(context: dict, png_path: Path) -> Path:
     except Exception as exc:
         raise RuntimeError(f"无法生成 PNG：缺少 Pillow 依赖 ({exc})") from exc
 
-    image = Image.new("RGB", (WIDTH, HEIGHT), "#08111f")
+    canvas_height = _estimate_png_height(context)
+    image = Image.new("RGB", (WIDTH, canvas_height), "#08111f")
     draw = ImageDraw.Draw(image)
     title_font = _font(34)
     text_font = _font(18)
@@ -915,19 +1024,29 @@ def render_png(context: dict, png_path: Path) -> Path:
     number_font = _font(28)
 
     data = _build_chart_data(context)
-    draw.rectangle((0, 0, WIDTH, HEIGHT), fill="#08111f")
+    cat_items = list(data["top_categories"].items())
+    duck_items = list(data["duck"].items())
+    bottom_h = max(
+        _panel_height(len(cat_items), 26, title_height=24, top_padding=12, bottom_padding=18),
+        _panel_height(len(duck_items), 32, title_height=24, top_padding=12, bottom_padding=18),
+    )
+    diagnosis_h = _estimate_diagnosis_height(context, draw, small_font)
+
+    draw.rectangle((0, 0, WIDTH, canvas_height), fill="#08111f")
     draw.ellipse((-160, -260, 760, 420), fill="#132d66")
-    draw.rectangle((34, 28, WIDTH - 34, HEIGHT - 28), outline="#1f4b89", width=2)
+    draw.rectangle((34, 28, WIDTH - 34, canvas_height - 28), outline="#1f4b89", width=2)
     draw.text((56, 44), context["title"], fill="#f3f8ff", font=title_font)
     draw.text((WIDTH - 380, 58), "周报数据可视化增强层", fill="#8ea4cf", font=text_font)
 
     y = 110
     if context["missing_dates"]:
+        missing_text = f"缺失日期提示：{'、'.join(context['missing_dates'])}"
         draw.rounded_rectangle((56, y, WIDTH - 56, y + 44), radius=8, fill="#3a2f13", outline="#ffcf5a")
-        draw.text((76, y + 12), f"缺失日期提示：{'、'.join(context['missing_dates'])}", fill="#ffe6a3", font=text_font)
+        draw.text((76, y + 12), _fit_text(draw, missing_text, text_font, WIDTH - 160), fill="#ffe6a3", font=text_font)
         y += 58
 
     stats = context["stats"]
+    missing_summary = f"缺失{len(context['missing_dates'])}天" if context["missing_dates"] else "完整"
     kpis = [
         ("本周营业额", _fmt_money(stats.get("total_revenue"))),
         ("日均营业额", _fmt_money(stats.get("daily_avg_revenue"))),
@@ -935,68 +1054,84 @@ def render_png(context: dict, png_path: Path) -> Path:
         ("客单价", _fmt_money(stats.get("avg_ticket"))),
         ("堂食占比", _fmt_percent(context["enriched"].get("dine_in_share"))),
         ("外卖占比", _fmt_percent(context["enriched"].get("takeaway_share"))),
-        ("周报天数/缺失", f"{stats['n_days']}/{stats['expected_days']} · {('无' if not context['missing_dates'] else '、'.join(context['missing_dates']))}"),
+        ("周报天数/缺失", f"{stats['n_days']}/{stats['expected_days']} · {missing_summary}"),
     ]
-    card_w = (WIDTH - 112 - 6 * 10) // 7
+    card_w = (WIDTH - LEFT_MARGIN * 2 - 6 * 10) // 7
+    card_h = 92
     for idx, (label, value) in enumerate(kpis):
-        x = 56 + idx * (card_w + 10)
-        draw.rounded_rectangle((x, y, x + card_w, y + 92), radius=8, fill="#102340", outline="#2b62aa")
+        x = LEFT_MARGIN + idx * (card_w + 10)
+        draw.rounded_rectangle((x, y, x + card_w, y + card_h), radius=8, fill="#102340", outline="#2b62aa")
         draw.text((x + 14, y + 14), label, fill="#8ea4cf", font=small_font)
-        draw.text((x + 14, y + 46), value, fill="#ffffff", font=number_font if idx < 4 else text_font)
-    y += 112
+        draw.text((x + 14, y + 46), _fit_text(draw, value, number_font if idx < 4 else text_font, card_w - 28), fill="#ffffff", font=number_font if idx < 4 else text_font)
+    y += card_h + 20
+
+    trend_h = 280
+    mid_h = 220
+    top_w = 1142
+    structure_w = WIDTH - LEFT_MARGIN * 2 - top_w - SECTION_GAP
+    row2_y = y + trend_h + SECTION_GAP
+    row3_y = row2_y + mid_h + SECTION_GAP
+    row4_y = row3_y + bottom_h + SECTION_GAP
+    diagnosis_y = row4_y + diagnosis_h + SECTION_GAP
 
     def panel(box, title):
         draw.rounded_rectangle(box, radius=8, fill="#0d1d36", outline="#264f8a")
         draw.text((box[0] + 16, box[1] + 12), title, fill="#b9d7ff", font=text_font)
 
-    panel((56, y, 1008, y + 230), "趋势判断")
-    panel((1032, y, WIDTH - 56, y + 230), "收入结构")
-    y2 = y + 248
-    panel((56, y2, 510, y2 + 168), "客单价趋势")
-    panel((526, y2, 1040, y2 + 168), "堂食 / 外卖 / 线上收入对比")
-    panel((1060, y2, WIDTH - 56, y2 + 168), "会员与活动")
-    y3 = y2 + 186
-    panel((56, y3, 768, y3 + 176), "关键品类销量 TOP")
-    panel((784, y3, WIDTH - 56, y3 + 176), "烤鸭专项分析")
-    y4 = y3 + 192
-    panel((56, y4, WIDTH - 56, y4 + 110), "本周经营诊断")
+    trend_box = (LEFT_MARGIN, y, LEFT_MARGIN + top_w, y + trend_h)
+    structure_box = (trend_box[2] + SECTION_GAP, y, WIDTH - LEFT_MARGIN, y + trend_h)
+    ticket_box = (LEFT_MARGIN, row2_y, LEFT_MARGIN + 594, row2_y + mid_h)
+    compare_box = (ticket_box[2] + SECTION_GAP, row2_y, ticket_box[2] + SECTION_GAP + 594, row2_y + mid_h)
+    activity_box = (compare_box[2] + SECTION_GAP, row2_y, WIDTH - LEFT_MARGIN, row2_y + mid_h)
+    cat_box = (LEFT_MARGIN, row3_y, LEFT_MARGIN + 876, row3_y + bottom_h)
+    duck_box = (cat_box[2] + SECTION_GAP, row3_y, WIDTH - LEFT_MARGIN, row3_y + bottom_h)
+    diagnosis_box = (LEFT_MARGIN, row4_y, WIDTH - LEFT_MARGIN, row4_y + diagnosis_h)
+
+    panel(trend_box, "趋势判断")
+    panel(structure_box, "收入结构")
+    panel(ticket_box, "客单价趋势")
+    panel(compare_box, "堂食 / 外卖 / 线上收入对比")
+    panel(activity_box, "会员与活动")
+    panel(cat_box, "关键品类销量 TOP")
+    panel(duck_box, "烤鸭专项分析")
+    panel(diagnosis_box, "本周经营诊断")
 
     # Trend panel
-    x1, y1, x2, y2p = 56, y, 1008, y + 230
+    x1, y1, x2, y2p = trend_box
     values = [v if v is not None else 0 for v in data["revenue"]]
     customers_values = [v if v is not None else 0 for v in data["customers"]]
     max_v = max(values or [1]) or 1
     max_c = max(customers_values or [1]) or 1
-    left = x1 + 32
+    left = x1 + 36
     right = x2 - 28
-    bottom = y2p - 34
+    bottom = y2p - 40
     points = []
     line_points = []
     for i, value in enumerate(values):
         x = left + i * ((right - left) / max(1, len(values) - 1))
-        h = int((value / max_v) * 130)
-        draw.rectangle((x - 20, bottom - h, x + 20, bottom), fill="#42d7ff")
+        h = int((value / max_v) * 150)
+        draw.rectangle((x - 22, bottom - h, x + 22, bottom), fill="#42d7ff")
         draw.text((x - 14, bottom + 6), data["labels"][i], fill="#8ea4cf", font=small_font)
         points.append((x, bottom - h))
     for i, value in enumerate(customers_values):
         x = left + i * ((right - left) / max(1, len(customers_values) - 1))
-        yy = bottom - int((value / max_c) * 130)
+        yy = bottom - int((value / max_c) * 150)
         line_points.append((x, yy))
     if len(line_points) > 1:
         draw.line(line_points, fill="#8b5cf6", width=4)
         for p in line_points:
             draw.ellipse((p[0] - 4, p[1] - 4, p[0] + 4, p[1] + 4), fill="#ffcf5a")
     if context["stats"]["best_day"]["date"]:
-        draw.text((x2 - 220, y + 18), f"最高营业日: {context['stats']['best_day']['date']}", fill="#ffe6a3", font=small_font)
+        draw.text((x2 - 260, y + 18), f"最高营业日: {context['stats']['best_day']['date']}", fill="#ffe6a3", font=small_font)
     if context["stats"]["worst_day"]["date"]:
-        draw.text((x2 - 220, y + 36), f"最低营业日: {context['stats']['worst_day']['date']}", fill="#ffe6a3", font=small_font)
+        draw.text((x2 - 260, y + 38), f"最低营业日: {context['stats']['worst_day']['date']}", fill="#ffe6a3", font=small_font)
 
     # Revenue structure panel
-    sx1, sy1, sx2, sy2p = 1032, y, WIDTH - 56, y + 230
+    sx1, sy1, sx2, sy2p = structure_box
     struct = data["structure"]
     if struct:
         total = sum(item["value"] for item in struct if item["value"] is not None) or 1
-        cx1, cy1, cx2, cy2 = sx1 + 42, sy1 + 38, sx1 + 178, sy1 + 174
+        cx1, cy1, cx2, cy2 = sx1 + 42, sy1 + 44, sx1 + 210, sy1 + 212
         start_angle = 0
         colors = ["#42d7ff", "#8b5cf6", "#18e3b7", "#ffcf5a"]
         for idx, item in enumerate(struct):
@@ -1004,26 +1139,28 @@ def render_png(context: dict, png_path: Path) -> Path:
             angle = 360 * val / total
             draw.pieslice((cx1, cy1, cx2, cy2), start_angle, start_angle + angle, fill=colors[idx % len(colors)])
             start_angle += angle
+        legend_x = sx1 + 250
         for idx, item in enumerate(struct):
-            ytext = sy1 + 30 + idx * 42
-            draw.rectangle((sx1 + 210, ytext, sx1 + 224, ytext + 14), fill=colors[idx % len(colors)])
+            ytext = sy1 + 40 + idx * 48
+            draw.rectangle((legend_x, ytext + 3, legend_x + 14, ytext + 17), fill=colors[idx % len(colors)])
             pct = (item["value"] or 0) / total * 100 if total else 0
-            draw.text((sx1 + 232, ytext - 2), f"{item['name']}  {_fmt_money(item['value'])}  {pct:.1f}%", fill="#dfe9ff", font=small_font)
-        draw.text((sx1 + 40, sy2p - 26), f"月累计 {_fmt_money(data['summary'].get('revenue_month_to_date'))}  同期累计 {_fmt_money(data['summary'].get('revenue_same_period_last_year'))}", fill="#8ea4cf", font=small_font)
-        draw.text((sx1 + 40, sy2p - 8), f"同比差额 {_fmt_money(data['summary'].get('revenue_yoy_delta'))}  月折前 {_fmt_money(data['summary'].get('revenue_mtd_before_discount'))}", fill="#8ea4cf", font=small_font)
+            legend = f"{item['name']}  {_fmt_money(item['value'])}  {pct:.1f}%"
+            draw.text((legend_x + 24, ytext), _fit_text(draw, legend, small_font, sx2 - legend_x - 28), fill="#dfe9ff", font=small_font)
+        draw.text((sx1 + 40, sy2p - 36), _fit_text(draw, f"月累计 {_fmt_money(data['summary'].get('revenue_month_to_date'))}  同期累计 {_fmt_money(data['summary'].get('revenue_same_period_last_year'))}", small_font, sx2 - sx1 - 80), fill="#8ea4cf", font=small_font)
+        draw.text((sx1 + 40, sy2p - 18), _fit_text(draw, f"同比差额 {_fmt_money(data['summary'].get('revenue_yoy_delta'))}  月折前 {_fmt_money(data['summary'].get('revenue_mtd_before_discount'))}", small_font, sx2 - sx1 - 80), fill="#8ea4cf", font=small_font)
     else:
-        draw.text((sx1 + 180, sy1 + 96), "暂无采集数据", fill="#7f90b8", font=text_font)
+        draw.text((sx1 + 180, sy1 + 120), "暂无采集数据", fill="#7f90b8", font=text_font)
 
-    def draw_line_chart(box, values, color="#18e3b7", title=None):
+    def draw_line_chart(box, values, color="#18e3b7"):
         x1, y1, x2, y2p = box
         numeric = [v if v is not None else 0 for v in values]
         max_v = max(numeric or [1]) or 1
-        if title:
-            draw.text((x1 + 12, y1 + 12), title, fill="#b9d7ff", font=small_font)
+        chart_top = y1 + 52
+        chart_bottom = y2p - 38
         points = []
         for i, value in enumerate(numeric):
-            x = x1 + 26 + i * ((x2 - x1 - 56) / max(1, len(numeric) - 1))
-            yv = y2p - 30 - (value / max_v) * (y2p - y1 - 56)
+            x = x1 + 32 + i * ((x2 - x1 - 64) / max(1, len(numeric) - 1))
+            yv = chart_bottom - (value / max_v) * (chart_bottom - chart_top)
             points.append((x, yv))
         if len(points) > 1:
             draw.line(points, fill=color, width=4)
@@ -1031,23 +1168,28 @@ def render_png(context: dict, png_path: Path) -> Path:
                 draw.ellipse((p[0] - 3, p[1] - 3, p[0] + 3, p[1] + 3), fill="#ffcf5a")
         for i, p in enumerate(points):
             if i < len(data["labels"]):
-                draw.text((p[0] - 12, y2p - 22), data["labels"][i], fill="#8ea4cf", font=small_font)
+                draw.text((p[0] - 12, y2p - 26), data["labels"][i], fill="#8ea4cf", font=small_font)
 
-    draw_line_chart((56, y2, 510, y2 + 168), data["avg_tickets"], color="#18e3b7")
+    draw_line_chart(ticket_box, data["avg_tickets"], color="#18e3b7")
 
     # Revenue compare
-    rbx1, rby1, rbx2, rby2 = 526, y2, 1040, y2 + 168
-    compare_items = [("堂食", context["enriched"].get("dine_in_revenue")), ("外卖", context["enriched"].get("takeaway_revenue")), ("线上", context["enriched"].get("online_revenue")), ("优惠", context["enriched"].get("discount_revenue"))]
+    rbx1, rby1, rbx2, rby2 = compare_box
+    compare_items = [
+        ("堂食", context["enriched"].get("dine_in_revenue")),
+        ("外卖", context["enriched"].get("takeaway_revenue")),
+        ("线上", context["enriched"].get("online_revenue")),
+        ("优惠", context["enriched"].get("discount_revenue")),
+    ]
     max_compare = max([item[1] or 0 for item in compare_items] or [1]) or 1
     for idx, (name, value) in enumerate(compare_items):
-        yy = rby1 + 34 + idx * 28
+        yy = rby1 + 44 + idx * 36
         draw.text((rbx1 + 16, yy), name, fill="#b9c7e6", font=small_font)
-        width = int(((value or 0) / max_compare) * (rbx2 - rbx1 - 130))
-        draw.rounded_rectangle((rbx1 + 76, yy + 2, rbx1 + 76 + width, yy + 16), radius=5, fill="#8b5cf6" if idx == 1 else "#42d7ff")
-        draw.text((rbx1 + 82 + width + 8, yy), _fmt_money(value), fill="#dfe9ff", font=small_font)
+        width = int(((value or 0) / max_compare) * (rbx2 - rbx1 - 180))
+        draw.rounded_rectangle((rbx1 + 92, yy + 2, rbx1 + 92 + width, yy + 18), radius=5, fill="#8b5cf6" if idx == 1 else "#42d7ff")
+        draw.text((rbx1 + 100 + width + 8, yy), _fit_text(draw, _fmt_money(value), small_font, rbx2 - (rbx1 + 92 + width + 18)), fill="#dfe9ff", font=small_font)
 
     # Activity panel
-    ax1, ay1, ax2, ay2 = 1060, y2, WIDTH - 56, y2 + 168
+    ax1, ay1, ax2, ay2 = activity_box
     activity_lines = [
         ("会员储值", data["activity"].get("会员储值")),
         ("月累计会员储值", data["activity"].get("月累计会员储值")),
@@ -1056,41 +1198,56 @@ def render_png(context: dict, png_path: Path) -> Path:
         ("代金券回收", data["activity"].get("代金券回收")),
         ("儿童卡发放", data["activity"].get("儿童卡发放")),
     ]
+    metric_w = (ax2 - ax1 - 28) // 2
+    metric_h = (ay2 - ay1 - 44) // 3
     for idx, (name, value) in enumerate(activity_lines):
-        yy = ay1 + 24 + (idx // 2) * 40
-        xx = ax1 + 14 + (idx % 2) * 110
-        draw.rectangle((xx, yy, xx + 98, yy + 34), fill="#102340", outline="#2b62aa")
-        draw.text((xx + 8, yy + 6), name, fill="#8ea4cf", font=small_font)
-        draw.text((xx + 8, yy + 18), _fmt_money(value) if "储值" in name or "收入" in name else _fmt_count(value), fill="#ffffff", font=small_font)
+        col = idx % 2
+        row = idx // 2
+        xx = ax1 + 14 + col * (metric_w + 14)
+        yy = ay1 + 36 + row * metric_h
+        draw.rounded_rectangle((xx, yy, xx + metric_w, yy + metric_h - 10), radius=8, fill="#102340", outline="#2b62aa")
+        label = _fit_text(draw, name, small_font, metric_w - 18)
+        draw.text((xx + 10, yy + 8), label, fill="#8ea4cf", font=small_font)
+        draw.text((xx + 10, yy + 28), _fit_text(draw, _fmt_money(value) if "储值" in name or "收入" in name else _fmt_count(value), text_font, metric_w - 18), fill="#ffffff", font=text_font)
 
     # Category top panel
-    cat_items = list(data["top_categories"].items())
     max_cat = max([v or 0 for _, v in cat_items] or [1]) or 1
+    cat_label_w = 240
+    bar_x = cat_box[0] + cat_label_w + 18
+    bar_max_w = cat_box[2] - bar_x - 24
     for idx, (name, value) in enumerate(cat_items):
-        yy = y3 + 32 + idx * 16
-        width = int(((value or 0) / max_cat) * (708 if (WIDTH - 56) > 768 else 650))
-        draw.text((76, yy), name, fill="#b9c7e6", font=small_font)
-        draw.rounded_rectangle((170, yy + 2, 170 + width, yy + 14), radius=4, fill="#42d7ff")
-        draw.text((180 + width, yy), _fmt_count(value), fill="#dfe9ff", font=small_font)
+        yy = row3_y + 34 + idx * 22
+        draw.text((cat_box[0] + 20, yy), _fit_text(draw, name, small_font, cat_label_w - 20), fill="#b9c7e6", font=small_font)
+        width = int(((value or 0) / max_cat) * bar_max_w)
+        draw.rounded_rectangle((bar_x, yy + 2, bar_x + width, yy + 14), radius=4, fill="#42d7ff")
+        draw.text((bar_x + width + 8, yy), _fmt_count(value), fill="#dfe9ff", font=small_font)
 
     # Duck special panel
-    duck_items = list(data["duck"].items())
     max_duck = max([v or 0 for _, v in duck_items if isinstance(v, (int, float)) or v is not None] or [1]) or 1
+    duck_col_w = (duck_box[2] - duck_box[0] - 48) // 2
     for idx, (name, value) in enumerate(duck_items):
         col = 0 if idx < 4 else 1
         row = idx if idx < 4 else idx - 4
-        xx = 808 + col * 290
-        yy = y3 + 34 + row * 34
-        draw.text((xx, yy), name, fill="#b9c7e6", font=small_font)
-        bar_x = xx + 82
-        bar_w = int(((value or 0) / max_duck) * 150) if value is not None else 0
-        draw.rounded_rectangle((bar_x, yy + 3, bar_x + bar_w, yy + 15), radius=4, fill="#18e3b7")
-        draw.text((bar_x + bar_w + 6, yy), _fmt_percent(value) if "占比" in name else _fmt_count(value), fill="#dfe9ff", font=small_font)
+        xx = duck_box[0] + 20 + col * (duck_col_w + 12)
+        yy = row3_y + 36 + row * 40
+        draw.text((xx, yy), _fit_text(draw, name, small_font, duck_col_w - 120), fill="#b9c7e6", font=small_font)
+        bar_x2 = xx + 84
+        bar_w = int(((value or 0) / max_duck) * (duck_col_w - 180)) if value is not None else 0
+        draw.rounded_rectangle((bar_x2, yy + 3, bar_x2 + bar_w, yy + 15), radius=4, fill="#18e3b7")
+        draw.text((bar_x2 + bar_w + 6, yy), _fmt_percent(value) if "占比" in name else _fmt_count(value), fill="#dfe9ff", font=small_font)
 
     # Diagnosis panel
-    dx1, dy1, dx2, dy2 = 56, y4, WIDTH - 56, y4 + 110
+    dx1, dy1, dx2, dy2 = diagnosis_box
+    line_y = dy1 + 34
+    text_width = dx2 - dx1 - 36
     for idx, line in enumerate(context["diagnosis"]):
-        draw.text((dx1 + 18, dy1 + 28 + idx * 18), f"• {line}", fill="#eaf4ff", font=small_font)
+        wrapped = _wrap_text(draw, line, small_font, text_width)
+        for wrap_idx, chunk in enumerate(wrapped):
+            prefix = "• " if wrap_idx == 0 else "  "
+            draw.text((dx1 + 18, line_y), prefix + chunk, fill="#eaf4ff", font=small_font)
+            line_y += 24
+        if idx != len(context["diagnosis"]) - 1:
+            line_y += 4
 
     image.save(png_path)
     return png_path
@@ -1107,10 +1264,11 @@ def render_dashboard(
     history = Path(history_path) if history_path else config.DATA_DIR / "store_history.csv"
     output = Path(output_dir) if output_dir else config.OUTPUT_DIR
     context = weekly_context(store, start_date, end_date, history, strict_weekly_date_check)
+    canvas_height = _estimate_png_height(context)
     start = date.fromisoformat(context["start_date"])
     end = date.fromisoformat(context["end_date"])
     html_path, png_path = output_paths(store, start, end, output)
-    render_html(context, html_path)
+    render_html(context, html_path, canvas_height=canvas_height)
     render_png(context, png_path)
     return {
         "html_path": str(html_path),
