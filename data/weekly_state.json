@@ -1,5 +1,18 @@
 {
   "version": "1.0",
-  "updated_at": "",
-  "pushed_periods": {}
+  "updated_at": "2026-06-01T08:14:43+08:00",
+  "pushed_periods": {
+    "便宜坊马连道:2026-05-25_2026-05-31": {
+      "store_name": "便宜坊马连道",
+      "start_date": "2026-05-25",
+      "end_date": "2026-05-31",
+      "trigger_date": "2026-05-31",
+      "pushed_at": "2026-06-01T08:14:43+08:00",
+      "days_found": 7,
+      "missing_dates": [],
+      "date_check_status": "complete",
+      "source": "store_history.csv",
+      "status": "done"
+    }
+  }
 }
