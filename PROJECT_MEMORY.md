@@ -365,3 +365,29 @@ grep "目标日期" data/pipeline_log.csv
 该 skill 不修改业务数据、不覆盖日期、不接入 `weekly_auto.py` 主流程。周报区间必须显式传入，不能用系统日期推断；缺失日期会显示在看板中，`STRICT_WEEKLY_DATE_CHECK=true` 时缺失日期会阻止生成推送图片。
 
 看板默认只生成 HTML/PNG，不调用飞书。需要发送到飞书群时显式增加 `--send-to-feishu`；脚本会在 PNG 生成成功后复用现有 `feishu_bot` 推送标题、说明和看板图片，PNG 不存在或图片上传配置不可用时会报错中止，且不输出任何 `.env`、webhook、token 或 app secret。
+
+#### 2026-06-01 周报看板飞书图片推送经验
+
+本次 `2026-05-25` 到 `2026-05-31` 周报看板图片已成功推送到飞书。关键经验：
+
+- Codex 环境可能无法访问 Mac 本机代理 `127.0.0.1:7897`，涉及图片上传推送时优先在 Mac 本机 Terminal 执行。
+- 推送前 `.env` 需要配置 `FEISHU_WEBHOOK`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`，但任何文档、日志和提交信息都不得记录真实值。
+- 如果 Python `requests` 无法解析 `open.feishu.cn`，但 `curl` 可以访问，优先怀疑 Python 代理或 DNS 路径问题。
+- 本机 Terminal 执行前可设置：
+
+```bash
+export HTTP_PROXY=http://127.0.0.1:7897
+export HTTPS_PROXY=http://127.0.0.1:7897
+```
+
+成功命令示例：
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31 \
+  --send-to-feishu
+```
+
+禁止记录任何真实 webhook、App Secret、token 或 `image_key`。

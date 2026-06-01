@@ -175,3 +175,27 @@ tail -n 5 data/pipeline_log.csv
 ```
 
 `--send-to-feishu` 是周报看板的独立可选图片推送开关，只在 PNG 成功生成后复用现有飞书逻辑发送标题、说明和看板图片；默认不推送，也不接入日报/周报主流程。
+
+### 周报看板飞书图片推送经验
+
+- Codex 环境可能无法访问 Mac 本机代理 `127.0.0.1:7897`，带图片上传的飞书推送建议在 Mac 本机 Terminal 执行。
+- 推送前 `.env` 必须配置 `FEISHU_WEBHOOK`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`；不得打印或写入真实值。
+- 如果 Python `requests` 无法解析 `open.feishu.cn`，但 `curl` 可以访问，通常是 Python 代理/DNS 路径问题。
+- 本机 Terminal 执行前可设置：
+
+```bash
+export HTTP_PROXY=http://127.0.0.1:7897
+export HTTPS_PROXY=http://127.0.0.1:7897
+```
+
+成功命令示例：
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31 \
+  --send-to-feishu
+```
+
+不要记录任何真实 webhook、App Secret、token 或 `image_key`。

@@ -532,6 +532,32 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 - 不传 `--send-to-feishu` 时不调用飞书推送；PNG 不存在时不允许推送。
 - 推送过程不打印 `.env`、webhook、token、app secret 等敏感信息。
 
+### 飞书图片推送运行经验
+
+本次 `2026-05-25` 到 `2026-05-31` 周报可视化看板图片已成功推送到飞书。经验如下：
+
+- Codex 环境可能无法访问 Mac 本机代理 `127.0.0.1:7897`，因此图片上传推送建议在 Mac 本机 Terminal 执行。
+- 推送前 `.env` 需要配置 `FEISHU_WEBHOOK`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`，但不得打印、提交或写入真实值。
+- 如果 Python `requests` 无法解析 `open.feishu.cn`，但 `curl` 可以访问，说明可能是 Python 代理/DNS 路径问题。
+- 本机 Terminal 执行前可设置代理：
+
+```bash
+export HTTP_PROXY=http://127.0.0.1:7897
+export HTTPS_PROXY=http://127.0.0.1:7897
+```
+
+成功命令示例：
+
+```bash
+python3 skills/weekly_dashboard/render_weekly_dashboard.py \
+  --store "便宜坊马连道" \
+  --start-date 2026-05-25 \
+  --end-date 2026-05-31 \
+  --send-to-feishu
+```
+
+禁止记录任何真实 webhook、App Secret、token 或 `image_key`。
+
 ---
 
 ## Workflow 4：项目健康检查
