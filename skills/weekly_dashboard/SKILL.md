@@ -5,6 +5,8 @@ description: Generate an ECharts-style weekly restaurant operations dashboard fr
 
 # 周报可视化看板 Skill
 
+> ⚠️ **周报默认标准已升级（2026-06-01）**：自动周报现在默认生成 **融合版“经营大屏 + 管理诊断”看板**（`scripts/render_manager_weekly_fusion.py`）。本 skill 现在是 **fallback**——当融合版脚本不存在或生成失败时，`weekly_auto.py` 才回退到这里。手动单独生成基础看板仍可使用本 skill。
+
 ## 用途
 
 把已经验证过的周报数据渲染成餐饮经营大屏风格看板，用于飞书汇报、经营复盘和周报增强展示。
@@ -83,7 +85,7 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 ## 注意事项
 
 - 只读取周报数据，不修改 `store_history.csv`、`pipeline_log.csv` 或任何业务日期。
-- 不接入现有 `weekly_auto.py` 主流程；是否自动随周报发送，后续再决定。
+- 自动周报默认走融合版看板；本 skill 仅作为融合版失败时的 fallback 被 `weekly_auto.py` 调用。
 - 不传 `--send-to-feishu` 时只生成 HTML/PNG，不调用飞书推送。
 - 传 `--send-to-feishu` 时必须先成功生成 PNG；PNG 不存在时中止推送。
 - 不打印 `.env`、webhook、token、app secret 等敏感信息。

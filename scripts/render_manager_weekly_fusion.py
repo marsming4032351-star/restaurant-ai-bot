@@ -4,7 +4,7 @@
 上半部分 = 经营大屏（核心指标 / 营收趋势 / 收入结构 / 客单价 / 会员 / 品类 / 烤鸭专项），
 下半部分 = 管理诊断（本周经营判断 / 风险预警 / 下周行动建议 / 数据质量说明）。
 
-数据来源（全部只读，不改历史数据、不造数、不推送飞书）：
+数据来源（全部只读，不改历史数据、不造数）：
   - data/store_history.csv      → 7 天完整窗口的营收/客流/客单/折扣/烤鸭
   - output/report_MLD_*.json    → 结构化日报，提供收入结构/会员/品类/烤鸭专项明细
                                    （仅部分日期存在，缺失日期会显式标注，不补全）
@@ -18,8 +18,11 @@ import csv
 import datetime as dt
 import json
 import os
+import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 CSV_PATH = os.path.join(ROOT, "data", "store_history.csv")
 REPORT_DIR = os.path.join(ROOT, "output")
 OUT_DIR = os.path.join(ROOT, "output")
@@ -227,6 +230,9 @@ def main():
     ap.add_argument("--store", default="便宜坊马连道")
     ap.add_argument("--start", default="2026-05-25")
     ap.add_argument("--end", default="2026-05-31")
+    ap.add_argument("--no-png", action="store_true", help="只生成 HTML，不渲染 PNG")
+    ap.add_argument("--send-to-feishu", action="store_true",
+                    help="PNG 生成成功后推送到飞书；缺凭证或 PNG 缺失时跳过，不输出敏感信息")
     args = ap.parse_args()
 
     days = load_history(args.store, args.start, args.end)
@@ -260,10 +266,19 @@ def main():
 
     os.makedirs(OUT_DIR, exist_ok=True)
     safe = args.store.replace("/", "_")
-    out_path = os.path.join(OUT_DIR, f"manager_weekly_fusion_{safe}_{args.start}_{args.end}.html")
+    stem = f"manager_weekly_fusion_{safe}_{args.start}_{args.end}"
+    out_path = os.path.join(OUT_DIR, stem + ".html")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
     print("WROTE", out_path)
+
+    png_path = None
+    if not args.no_png:
+        png_path = os.path.join(OUT_DIR, stem + ".png")
+        render_png(args.store, args.start, args.end, days, h, r,
+                   present, missing, alerts, insights, next_week, data_quality, png_path)
+        print("WROTE", png_path)
+
     print(json.dumps({
         "history_days": h["n"], "report_days": n_present, "missing": missing,
         "total_rev": round(h["total_rev"], 2), "total_cust": h["total_cust"],
@@ -271,6 +286,13 @@ def main():
         "channel_dine_in": round(r["dine_in"], 2), "channel_online": round(r["online"], 2),
         "duck_total_report": r["duck_total"], "duck_total_history": h["total_duck"],
     }, ensure_ascii=False))
+
+    if args.send_to_feishu:
+        if not png_path or not os.path.exists(png_path):
+            raise SystemExit("[fusion] PNG 不存在，拒绝推送飞书")
+        send_fusion_to_feishu(png_path, args.store, args.start, args.end,
+                              h["n"], n_present, missing)
+        print("[fusion] 已推送融合版看板图片到飞书")
 
 
 def render_html(store, start, end, days, h, r, present, missing, alerts, insights, next_week, dq):
@@ -467,7 +489,7 @@ footer{{text-align:center;color:#52668a;font-size:12px;margin-top:28px}}
 <h2 class="diag">数据质量说明</h2>
 <div class="dq"><ul>{dq_html}</ul></div>
 
-<footer>本看板只读真实日报数据生成，不修改历史数据、不推送飞书 · {store} · {start}~{end}</footer>
+<footer>本看板只读真实日报数据生成，不修改历史数据 · {store} · {start}~{end}</footer>
 </div>
 <script>
 const cats={json.dumps(cats, ensure_ascii=False)};
@@ -513,6 +535,424 @@ I('wdwe').setOption({{tooltip:{{trigger:'axis'}},grid:{{left:62,right:24,top:24,
  series:[{{type:'bar',data:[{{value:{round(h['wd_avg'],0)},itemStyle:{{color:'#41557a'}}}},{{value:{round(h['we_avg'],0)},itemStyle:{{color:'#5b8cff'}}}}],
  barWidth:'46%',label:{{show:true,position:'top',color:'#cdd9ec',formatter:'¥{{c}}'}}}}]}});
 </script></body></html>"""
+
+
+# ============================ PNG 渲染（PIL，无浏览器依赖） ============================
+# 飞书自动推送需要 PNG，但 launchd 自动化环境无 headless 浏览器，
+# 因此用 Pillow 直接绘制融合版看板（经营大屏 + 管理诊断），与 HTML 同口径同数据。
+
+def _font(size):
+    from PIL import ImageFont
+    for path in (
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+    ):
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size=size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+
+def _wrap(draw, text, font, max_w):
+    lines, cur = [], ""
+    for ch in text:
+        if ch == "\n":
+            lines.append(cur)
+            cur = ""
+            continue
+        trial = cur + ch
+        if draw.textlength(trial, font=font) <= max_w:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = ch
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _money(v):
+    return f"¥{v:,.0f}"
+
+
+def render_png(store, start, end, days, h, r, present, missing,
+               alerts, insights, next_week, dq, png_path):
+    from PIL import Image, ImageDraw
+
+    W = 1920
+    M = 56            # 左右边距
+    GAP = 16
+    CARD = "#0e1828"
+    PANEL = "#0d1d36"
+    OUT = "#264f8a"
+    BG = "#070d1a"
+    SUB = "#8ea4cf"
+
+    f_title = _font(36)
+    f_h2 = _font(22)
+    f_num = _font(30)
+    f_txt = _font(18)
+    f_sm = _font(15)
+    f_xs = _font(13)
+
+    n_present = len(present)
+    # 用超高画布绘制后裁剪
+    img = Image.new("RGB", (W, 2600), BG)
+    d = ImageDraw.Draw(img)
+
+    def panel(box, title=None, accent="#5b8cff"):
+        d.rounded_rectangle(box, radius=10, fill=PANEL, outline=OUT)
+        if title:
+            d.rectangle((box[0], box[1] + 12, box[0] + 4, box[1] + 30), fill=accent)
+            d.text((box[0] + 16, box[1] + 12), title, fill="#b9d7ff", font=f_txt)
+
+    inner_w = W - 2 * M
+    y = 36
+
+    # —— 标题区 ——
+    d.text((M, y), f"{store} · 周报经营决策看板", fill="#f3f8ff", font=f_title)
+    d.text((W - 430, y + 6), "📊 经营大屏 + 管理诊断", fill="#7fb0ff", font=f_txt)
+    y += 50
+    miss_tag = "覆盖 7/7 天" if not missing else "明细缺 " + "、".join(m[5:] for m in missing)
+    period = (f"统计周期：{start} ~ {end}（自然周 · 周一至周日 · 核心指标 {h['n']}/7 天，"
+              f"结构明细 {n_present}/7 天 · {miss_tag}）")
+    d.text((M, y), period, fill=SUB, font=f_sm)
+    d.text((W - 430, y), "数据：store_history.csv + report_MLD_*.json", fill="#6f86a8", font=f_xs)
+    y += 30
+
+    # —— 决策横幅 ——
+    verdict = (f"本周营收 {_money(h['total_rev'])}（环比走高），但增长含金量低：全周折扣率 "
+               f"{h['avg_discount']:.0f}%、月同比 {h['latest_yoy']:.0f}%、套餐挂零、精酿零销。"
+               f"下周核心动作 = 降折扣 + 救工作日 + 放大烤鸭外带。")
+    vlines = _wrap(d, verdict, f_txt, inner_w - 60)
+    vh = 20 + len(vlines) * 26
+    d.rounded_rectangle((M, y, W - M, y + vh), radius=12, fill="#13233f", outline="#2a3d5e")
+    for i, ln in enumerate(vlines):
+        d.text((M + 24, y + 12 + i * 26), ("📌 " + ln) if i == 0 else ln,
+               fill="#ffe6a3" if i == 0 else "#dfe9ff", font=f_txt)
+    y += vh + GAP + 6
+
+    # —— 核心指标：8 卡，4 列 2 行 ——
+    d.rectangle((M, y, M + 4, y + 20), fill="#5b8cff")
+    d.text((M + 14, y), "核心指标", fill="#cdd9ec", font=f_h2)
+    d.text((M + 130, y + 6), "7 天完整窗口", fill="#6f86a8", font=f_sm)
+    y += 36
+    kpis = [
+        ("本周营业额", _money(h["total_rev"]), f"日均 {_money(h['daily_avg_rev'])}", "#5b8cff"),
+        ("本周总客流", f"{h['total_cust']:,} 人", f"周客单 ¥{h['week_avg_ticket']:.0f}", "#37d4a0"),
+        ("月累计同比", f"{h['latest_yoy']:.1f}%", f"差额 {_money(r['yoy_delta'])}", "#ff5a6e"),
+        ("平均折扣率", f"{h['avg_discount']:.1f}%", "利润头号杀手", "#ff9f43"),
+        ("烤鸭总销量", f"{h['total_duck']:.0f} 只", f"日均 {h['total_duck']/h['n']:.0f} 只", "#ffd24a"),
+        ("周末/工作日", f"{h['we_wd_ratio']:.2f}×", f"工作日日均 {_money(h['wd_avg'])}", "#c77dff"),
+        ("堂食占比", f"{h['avg_dine_in']:.1f}%", f"外带 {h['avg_takeaway']:.1f}%", "#5cc8ff"),
+        ("周报完整度", f"{h['n']}/7 天", f"结构明细 {n_present}/7 天", "#9fb3d1"),
+    ]
+    cols, kw = 4, (inner_w - 3 * GAP) // 4
+    kh = 96
+    for idx, (label, val, sub, acc) in enumerate(kpis):
+        cx = M + (idx % cols) * (kw + GAP)
+        cy = y + (idx // cols) * (kh + GAP)
+        d.rounded_rectangle((cx, cy, cx + kw, cy + kh), radius=10, fill=CARD, outline=OUT)
+        d.text((cx + 16, cy + 12), label, fill=SUB, font=f_sm)
+        d.text((cx + 16, cy + 38), val, fill=acc, font=f_num)
+        d.text((cx + 16, cy + 74), sub, fill="#6f86a8", font=f_xs)
+    y += 2 * kh + GAP + GAP + 8
+
+    # —— 趋势 + 收入结构 ——
+    trend_h = 300
+    trend_w = int(inner_w * 0.62)
+    struct_w = inner_w - trend_w - GAP
+    tb = (M, y, M + trend_w, y + trend_h)
+    sb = (M + trend_w + GAP, y, W - M, y + trend_h)
+    panel(tb, "营收趋势 × 折扣率")
+    panel(sb, f"收入结构（{n_present} 日口径）", "#37d4a0")
+
+    # trend bars + discount line
+    labels = [f"{x['date'][5:]} {x['wd']}" for x in days]
+    revs = [x["revenue"] for x in days]
+    discs = [x["discount"] for x in days]
+    max_r = max(revs) or 1
+    plot_l, plot_r = tb[0] + 46, tb[2] - 30
+    plot_b, plot_t = tb[3] - 40, tb[1] + 46
+    n = len(days)
+    step = (plot_r - plot_l) / max(1, n)
+    for i, v in enumerate(revs):
+        bx = plot_l + i * step + step / 2
+        bh = int((v / max_r) * (plot_b - plot_t))
+        d.rectangle((bx - 22, plot_b - bh, bx + 22, plot_b), fill="#5b8cff")
+        d.text((bx - 30, plot_b + 8), labels[i], fill=SUB, font=f_xs)
+    dmin, dmax = 30, 50
+    dline = []
+    for i, v in enumerate(discs):
+        bx = plot_l + i * step + step / 2
+        yy = plot_b - (max(dmin, min(dmax, v)) - dmin) / (dmax - dmin) * (plot_b - plot_t)
+        dline.append((bx, yy))
+    if len(dline) > 1:
+        d.line(dline, fill="#ff9f43", width=3)
+        for p in dline:
+            d.ellipse((p[0] - 4, p[1] - 4, p[0] + 4, p[1] + 4), fill="#ff9f43")
+    d.text((tb[0] + 16, tb[1] + 34), "营业额(柱) / 折扣率(线)", fill="#6f86a8", font=f_xs)
+
+    # pie 收入结构
+    pie = [("堂食", r["dine_in"], "#5b8cff"), ("堂食打包", r["dine_in_takeaway"], "#37d4a0"),
+           ("线上外卖", r["online"], "#ffd24a"), ("优惠让利", r["discount_revenue"], "#c77dff")]
+    tot = sum(p[1] for p in pie) or 1
+    pcx, pcy, pr = sb[0] + 120, sb[1] + 150, 78
+    ang = -90
+    for name, val, col in pie:
+        sweep = 360 * val / tot
+        d.pieslice((pcx - pr, pcy - pr, pcx + pr, pcy + pr), ang, ang + sweep, fill=col)
+        ang += sweep
+    d.ellipse((pcx - 34, pcy - 34, pcx + 34, pcy + 34), fill=PANEL)
+    lx = sb[0] + 240
+    for i, (name, val, col) in enumerate(pie):
+        ly = sb[1] + 60 + i * 34
+        d.rectangle((lx, ly + 3, lx + 14, ly + 17), fill=col)
+        pct = val / tot * 100
+        d.text((lx + 22, ly), f"{name}  {_money(val)}  {pct:.1f}%", fill="#dfe9ff", font=f_sm)
+    d.text((sb[0] + 16, sb[3] - 52),
+           _fit(d, f"月累计 {_money(r['mtd'])}  ·  同期累计 {_money(r['mtd_last_year'])}", f_xs, struct_w - 32),
+           fill=SUB, font=f_xs)
+    d.text((sb[0] + 16, sb[3] - 32),
+           _fit(d, f"同比差额 {_money(r['yoy_delta'])}  ·  月折前 {_money(r['mtd_before_discount'])}", f_xs, struct_w - 32),
+           fill=SUB, font=f_xs)
+    y += trend_h + GAP
+
+    # —— 三联：客单价 / 渠道收入 / 客流×烤鸭 ——
+    row_h = 240
+    cw = (inner_w - 2 * GAP) // 3
+    b1 = (M, y, M + cw, y + row_h)
+    b2 = (M + cw + GAP, y, M + 2 * cw + GAP, y + row_h)
+    b3 = (M + 2 * cw + 2 * GAP, y, W - M, y + row_h)
+    panel(b1, "客单价趋势")
+    panel(b2, f"渠道收入对比（{n_present} 日）", "#5cc8ff")
+    panel(b3, "客流 × 烤鸭")
+
+    # 客单价 line
+    tk = [x["avg_ticket"] for x in days]
+    mn, mx = min(tk), max(tk)
+    rng = (mx - mn) or 1
+    pl, prr = b1[0] + 30, b1[2] - 20
+    pb, pt = b1[3] - 34, b1[1] + 50
+    pts = []
+    for i, v in enumerate(tk):
+        xx = pl + i * (prr - pl) / max(1, n - 1)
+        yy = pb - (v - mn) / rng * (pb - pt)
+        pts.append((xx, yy))
+    if len(pts) > 1:
+        d.line(pts, fill="#37d4a0", width=3)
+        for p in pts:
+            d.ellipse((p[0] - 3, p[1] - 3, p[0] + 3, p[1] + 3), fill="#ffd24a")
+    d.text((b1[0] + 16, b1[3] - 26), f"区间 ¥{mn:.0f} ~ ¥{mx:.0f}", fill="#6f86a8", font=f_xs)
+
+    # 渠道 bar
+    chans = [("堂食", r["dine_in"]), ("堂食打包", r["dine_in_takeaway"]),
+             ("线上外卖", r["online"]), ("优惠让利", r["discount_revenue"])]
+    mxc = max(v for _, v in chans) or 1
+    for i, (name, val) in enumerate(chans):
+        yy = b2[1] + 52 + i * 40
+        d.text((b2[0] + 16, yy), name, fill="#b9c7e6", font=f_sm)
+        bw = int(val / mxc * (b2[2] - b2[0] - 230))
+        d.rounded_rectangle((b2[0] + 110, yy + 1, b2[0] + 110 + bw, yy + 17), radius=5, fill="#5cc8ff")
+        d.text((b2[0] + 118 + bw, yy), _money(val), fill="#dfe9ff", font=f_sm)
+
+    # 客流 bar + 烤鸭 line
+    custs = [x["cust"] for x in days]
+    ducks = [x["duck"] for x in days]
+    mxu = max(custs) or 1
+    mxd = max(ducks) or 1
+    pl, prr = b3[0] + 36, b3[2] - 30
+    pb, pt = b3[3] - 34, b3[1] + 50
+    step3 = (prr - pl) / max(1, n)
+    for i, v in enumerate(custs):
+        bx = pl + i * step3 + step3 / 2
+        bh = int(v / mxu * (pb - pt))
+        d.rectangle((bx - 14, pb - bh, bx + 14, pb), fill="#37d4a0")
+    dl = []
+    for i, v in enumerate(ducks):
+        bx = pl + i * step3 + step3 / 2
+        dl.append((bx, pb - v / mxd * (pb - pt)))
+    if len(dl) > 1:
+        d.line(dl, fill="#ffd24a", width=3)
+        for p in dl:
+            d.ellipse((p[0] - 3, p[1] - 3, p[0] + 3, p[1] + 3), fill="#ffd24a")
+    d.text((b3[0] + 16, b3[3] - 26), "客流(柱) / 烤鸭只数(线)", fill="#6f86a8", font=f_xs)
+    y += row_h + GAP
+
+    # —— 品类 TOP + 会员 ——
+    bh2 = 300
+    catw = int(inner_w * 0.6)
+    cb = (M, y, M + catw, y + bh2)
+    mb = (M + catw + GAP, y, W - M, y + bh2)
+    panel(cb, f"关键品类销量 TOP（{n_present} 日累计）")
+    panel(mb, f"会员与活动（{n_present} 日）", "#37d4a0")
+    cat_items = sorted([
+        ("烧饼", r["sesame_cake"]), ("烤鸭小料", r["duck_sauce"]),
+        ("位吃+甜品", r["per_seat"] + r["sweet"] + r["dessert"]),
+        ("烤鸭", r["duck_total"]), ("套餐", r["set_meal_total"]),
+        ("自制饮品", r["house_drink"]), ("乳鸽", r["pigeon"]),
+        ("鱼类+牛掌", r["fish_total"] + r["beef_paw"]), ("精酿", r["craft_beer"]),
+    ], key=lambda x: x[1], reverse=True)
+    mxcat = max(v for _, v in cat_items) or 1
+    bx0 = cb[0] + 150
+    bmax = cb[2] - bx0 - 70
+    for i, (name, val) in enumerate(cat_items):
+        yy = cb[1] + 46 + i * 27
+        d.text((cb[0] + 18, yy), name, fill="#b9c7e6", font=f_sm)
+        bw = int(val / mxcat * bmax)
+        d.rounded_rectangle((bx0, yy + 2, bx0 + bw, yy + 16), radius=4, fill="#5cc8ff")
+        d.text((bx0 + bw + 8, yy), f"{val:.0f}", fill="#dfe9ff", font=f_sm)
+    members = [
+        ("会员储值(5日)", _money(r["member_recharge"])), ("月累计储值", _money(r["member_recharge_mtd"])),
+        ("会员消费(5日)", _money(r["member_revenue"])), ("原价消费(5日)", _money(r["full_price_revenue"])),
+        ("发券(5日)", f"{r['coupon_issued']:.0f} 张"), ("验券(5日)", f"{r['coupon_redeemed']:.0f} 张"),
+    ]
+    mcw = (mb[2] - mb[0] - 42) // 2
+    mch = (bh2 - 56) // 3
+    for i, (name, val) in enumerate(members):
+        col, row = i % 2, i // 2
+        xx = mb[0] + 14 + col * (mcw + 14)
+        yy = mb[1] + 44 + row * mch
+        d.rounded_rectangle((xx, yy, xx + mcw, yy + mch - 12), radius=8, fill=CARD, outline=OUT)
+        d.text((xx + 12, yy + 10), name, fill=SUB, font=f_sm)
+        d.text((xx + 12, yy + 36), val, fill="#dfe9ff", font=f_txt)
+    y += bh2 + GAP
+
+    # —— 烤鸭专项 + 工作日vs周末 ——
+    bh3 = 250
+    dw = int(inner_w * 0.6)
+    db = (M, y, M + dw, y + bh3)
+    wb = (M + dw + GAP, y, W - M, y + bh3)
+    panel(db, f"烤鸭专项分析（{n_present} 日）", "#ffd24a")
+    panel(wb, "工作日 vs 周末（7 天）", "#c77dff")
+    ducks_stat = [
+        ("烤鸭总销量(5日)", f"{r['duck_total']:.0f} 只"), ("堂食烤鸭", f"{r['duck_dine_in']:.0f} 只"),
+        ("线上烤鸭", f"{r['duck_online']:.0f} 只"), ("迷你烤鸭", f"{r['mini_duck']:.0f} 只"),
+        ("鸭架(椒盐/熬汤)", f"{r['duck_rack']:.0f} 份"), ("烧饼/鸭酱", f"{r['sesame_cake']:.0f}/{r['duck_sauce']:.0f}"),
+        ("鸭架转化率(均)", f"{r['avg_rack_ratio']:.1f}%"), ("烧饼搭售率(均)", f"{r['avg_cake_ratio']:.1f}%"),
+    ]
+    dcw = (db[2] - db[0] - 42) // 2
+    dch = (bh3 - 50) // 4
+    for i, (name, val) in enumerate(ducks_stat):
+        col, row = i % 2, i // 2
+        xx = db[0] + 14 + col * (dcw + 14)
+        yy = db[1] + 42 + row * dch
+        d.text((xx + 6, yy), name, fill=SUB, font=f_xs)
+        d.text((xx + 6, yy + 18), val, fill="#dfe9ff", font=f_sm)
+    # wd vs we bars
+    vals = [("工作日日均", h["wd_avg"], "#41557a"), ("周末日均", h["we_avg"], "#5b8cff")]
+    mxw = max(v for _, v, _ in vals) or 1
+    base = wb[3] - 46
+    top = wb[1] + 56
+    for i, (name, val, col) in enumerate(vals):
+        bx = wb[0] + 120 + i * 230
+        bh = int(val / mxw * (base - top))
+        d.rectangle((bx, base - bh, bx + 120, base), fill=col)
+        d.text((bx + 6, base - bh - 24), _money(val), fill="#cdd9ec", font=f_sm)
+        d.text((bx + 8, base + 8), name, fill=SUB, font=f_sm)
+    y += bh3 + GAP + 6
+
+    # —— 分隔：管理诊断 ——
+    d.text((W // 2 - 150, y), "───── 管理诊断 ─────", fill="#46597d", font=f_txt)
+    y += 40
+
+    # 风险预警
+    d.rectangle((M, y, M + 4, y + 20), fill="#ff9f43")
+    d.text((M + 14, y), "风险预警", fill="#ffcaa0", font=f_h2)
+    y += 36
+    for a in alerts:
+        title = ("🔴 严重  " if a["level"] == "critical" else "🟠 关注  ") + a["title"]
+        det_lines = _wrap(d, a["detail"], f_sm, inner_w - 60)
+        box_h = 40 + len(det_lines) * 22
+        bar = "#ff5a6e" if a["level"] == "critical" else "#ff9f43"
+        d.rounded_rectangle((M, y, W - M, y + box_h), radius=10, fill=CARD, outline=OUT)
+        d.rectangle((M, y, M + 4, y + box_h), fill=bar)
+        d.text((M + 20, y + 12), title, fill="#ffffff", font=f_txt)
+        for i, ln in enumerate(det_lines):
+            d.text((M + 20, y + 38 + i * 22), ln, fill="#a8bad6", font=f_sm)
+        y += box_h + 10
+    y += 8
+
+    # 经营洞察
+    d.rectangle((M, y, M + 4, y + 20), fill="#37d4a0")
+    d.text((M + 14, y), "经营洞察", fill="#a0e8cf", font=f_h2)
+    y += 36
+    for ins in insights:
+        body_lines = _wrap(d, ins["body"], f_sm, inner_w - 60)
+        box_h = 40 + len(body_lines) * 22
+        d.rounded_rectangle((M, y, W - M, y + box_h), radius=10, fill=CARD, outline=OUT)
+        d.rectangle((M, y, M + 4, y + box_h), fill="#37d4a0")
+        d.text((M + 20, y + 12), f"{ins['icon']} {ins['title']}", fill="#ffffff", font=f_txt)
+        for i, ln in enumerate(body_lines):
+            d.text((M + 20, y + 38 + i * 22), ln, fill="#a8bad6", font=f_sm)
+        y += box_h + 10
+    y += 8
+
+    # 下周行动建议
+    d.rectangle((M, y, M + 4, y + 20), fill="#5b8cff")
+    d.text((M + 14, y), "下周行动建议", fill="#bcd0ff", font=f_h2)
+    y += 36
+    for a in next_week:
+        text = a["text"]
+        lines = _wrap(d, text, f_sm, inner_w - 200)
+        box_h = 20 + len(lines) * 22
+        d.rounded_rectangle((M, y, W - M, y + box_h), radius=10, fill=CARD, outline=OUT)
+        d.rounded_rectangle((M + 16, y + 14, M + 130, y + 40), radius=6, fill="#1c3157")
+        d.text((M + 26, y + 18), a["tag"], fill="#7fb0ff", font=f_sm)
+        for i, ln in enumerate(lines):
+            d.text((M + 150, y + 12 + i * 22), ln, fill="#d4deee", font=f_sm)
+        y += box_h + 10
+    y += 8
+
+    # 数据质量说明
+    d.rectangle((M, y, M + 4, y + 20), fill="#9fb3d1")
+    d.text((M + 14, y), "数据质量说明", fill="#c5d3e8", font=f_h2)
+    y += 34
+    dq_lines = []
+    for item in dq:
+        wrapped = _wrap(d, "• " + item, f_sm, inner_w - 60)
+        dq_lines.extend(wrapped)
+        dq_lines.append("")
+    box_h = 24 + len(dq_lines) * 22
+    d.rounded_rectangle((M, y, W - M, y + box_h), radius=10, fill=CARD, outline="#2a3d5e")
+    for i, ln in enumerate(dq_lines):
+        d.text((M + 22, y + 14 + i * 22), ln, fill="#a8bad6", font=f_sm)
+    y += box_h + 16
+
+    d.text((M, y), f"本看板只读真实日报数据生成，不修改历史数据 · {store} · {start}~{end}",
+           fill="#52668a", font=f_xs)
+    y += 30
+
+    img = img.crop((0, 0, W, min(y, img.height)))
+    img.save(png_path)
+    return png_path
+
+
+def _fit(draw, text, font, max_w):
+    if draw.textlength(text, font=font) <= max_w:
+        return text
+    while text and draw.textlength(text + "…", font=font) > max_w:
+        text = text[:-1]
+    return text + "…"
+
+
+def send_fusion_to_feishu(png_path, store, start, end, hist_days, report_days, missing):
+    """复用 feishu_bot 图片上传逻辑推送融合版看板；缺凭证则抛错跳过，不打印敏感信息。"""
+    import feishu_bot
+    from pathlib import Path
+
+    if not feishu_bot._has_app_creds():
+        raise RuntimeError("未配置飞书 App 图片上传凭证，已跳过融合版图片推送")
+    miss_note = "数据完整 7/7 天" if not missing else "缺失明细日期：" + "、".join(missing)
+    title = f"{store}｜{start} 至 {end} 周报经营决策看板（经营大屏 + 管理诊断）"
+    note = (f"核心指标 {hist_days}/7 天，结构明细 {report_days}/7 天；{miss_note}。"
+            "数据来自已校验真实日报，缺失不补全、不伪造。")
+    key = feishu_bot._upload_image(Path(png_path))
+    feishu_bot.send_text(f"{title}\n{note}", ensure_keyword=False)
+    feishu_bot._send_image_key(key)
 
 
 if __name__ == "__main__":

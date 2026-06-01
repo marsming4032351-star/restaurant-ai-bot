@@ -372,6 +372,38 @@ python3 weekly_report.py --start 2026-05-20 --end 2026-05-26
 python3 weekly_report.py --days 14
 ```
 
+### 周报看板标准（2026-06-01 升级：经营大屏 + 管理诊断）
+
+自动周报的默认看板已升级为 **融合版“经营大屏 + 管理诊断”**，由 `scripts/render_manager_weekly_fusion.py` 生成 HTML，并截图成 PNG 推送飞书。
+
+模块包含：核心指标、营收趋势、收入结构、客单价、渠道收入、客流×烤鸭、关键品类、会员、烤鸭专项、风险预警、经营洞察、下周行动建议、数据质量说明。
+
+数据纪律：
+- 只读取真实日报数据（`data/store_history.csv` + `output/report_MLD_*.json`），不造数、不改历史数据。
+- 7 天完整窗口（history）与 5 天结构化窗口（report JSON）分别标注口径；缺失日期（如 2026-05-25 / 05-28）在看板上显式标注，不补全。
+
+Fallback：原 `skills/weekly_dashboard/` 基础看板保留为 fallback；融合版脚本不存在或生成失败时，`weekly_auto.py` 自动回退到基础看板。
+
+本地生成与推送命令：
+
+```bash
+# 生成融合版 HTML + PNG（不推送）
+python3 scripts/render_manager_weekly_fusion.py \
+  --store 便宜坊马连道 --start 2026-05-25 --end 2026-05-31
+
+# 只生成 HTML（跳过 PNG）
+python3 scripts/render_manager_weekly_fusion.py \
+  --store 便宜坊马连道 --start 2026-05-25 --end 2026-05-31 --no-png
+
+# 生成并推送飞书（PNG 成功后复用现有飞书推送逻辑）
+python3 scripts/render_manager_weekly_fusion.py \
+  --store 便宜坊马连道 --start 2026-05-25 --end 2026-05-31 --send-to-feishu
+```
+
+输出路径：
+- `output/manager_weekly_fusion_便宜坊马连道_2026-05-25_2026-05-31.html`
+- `output/manager_weekly_fusion_便宜坊马连道_2026-05-25_2026-05-31.png`
+
 ### 日志文件位置
 
 | 日志 | 路径 | 内容 |

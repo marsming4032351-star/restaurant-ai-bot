@@ -68,7 +68,41 @@ def _default_push_weekly(payload: dict) -> None:
     _push_weekly_dashboard(payload)
 
 
-def _push_weekly_dashboard(payload: dict) -> None:
+def _run_dashboard_cmd(cmd: list[str]) -> None:
+    completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "周报看板生成失败")
+
+
+def _push_fusion_dashboard(payload: dict) -> bool:
+    """默认标准：经营大屏 + 管理诊断 融合版看板（HTML + PNG）。"""
+    fusion_script = ROOT_DIR / "scripts" / "render_manager_weekly_fusion.py"
+    if not fusion_script.exists():
+        print(f"[weekly-auto] 融合版看板脚本不存在，回退到基础看板: {fusion_script}")
+        return False
+
+    cmd = [
+        sys.executable,
+        str(fusion_script),
+        "--store",
+        payload["store_name"],
+        "--start",
+        payload["start_date"],
+        "--end",
+        payload["end_date"],
+    ]
+    if config.FEISHU_APP_ID and config.FEISHU_APP_SECRET:
+        cmd.append("--send-to-feishu")
+
+    _run_dashboard_cmd(cmd)
+    print(f"[weekly-auto] 融合版看板（经营大屏+管理诊断）已生成: {payload['start_date']}～{payload['end_date']}")
+    if config.FEISHU_APP_ID and config.FEISHU_APP_SECRET:
+        print(f"[weekly-auto] 融合版看板已尝试发送到飞书: {payload['start_date']}～{payload['end_date']}")
+    return True
+
+
+def _push_legacy_dashboard(payload: dict) -> None:
+    """Fallback：原 weekly_dashboard 基础看板。"""
     dashboard_script = ROOT_DIR / "skills" / "weekly_dashboard" / "render_weekly_dashboard.py"
     if not dashboard_script.exists():
         print(f"[weekly-auto] 周报看板脚本不存在，跳过增强看板: {dashboard_script}")
@@ -87,15 +121,24 @@ def _push_weekly_dashboard(payload: dict) -> None:
     if config.FEISHU_APP_ID and config.FEISHU_APP_SECRET:
         cmd.append("--send-to-feishu")
 
+    _run_dashboard_cmd(cmd)
+    print(f"[weekly-auto] 基础看板已生成: {payload['start_date']}～{payload['end_date']}")
+    if config.FEISHU_APP_ID and config.FEISHU_APP_SECRET:
+        print(f"[weekly-auto] 基础看板已尝试发送到飞书: {payload['start_date']}～{payload['end_date']}")
+
+
+def _push_weekly_dashboard(payload: dict) -> None:
+    """周报看板推送：默认融合版，失败回退到原 weekly_dashboard。"""
     try:
-        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        if completed.returncode != 0:
-            raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "周报看板生成失败")
-        print(f"[weekly-auto] 增强看板已生成: {payload['start_date']}～{payload['end_date']}")
-        if config.FEISHU_APP_ID and config.FEISHU_APP_SECRET:
-            print(f"[weekly-auto] 增强看板已尝试发送到飞书: {payload['start_date']}～{payload['end_date']}")
+        if _push_fusion_dashboard(payload):
+            return
     except Exception as exc:
-        print(f"[weekly-auto] 增强看板失败: {type(exc).__name__}: {exc}")
+        print(f"[weekly-auto] 融合版看板失败，回退基础看板: {type(exc).__name__}: {exc}")
+
+    try:
+        _push_legacy_dashboard(payload)
+    except Exception as exc:
+        print(f"[weekly-auto] 基础看板失败: {type(exc).__name__}: {exc}")
 
 
 def check_and_push(
