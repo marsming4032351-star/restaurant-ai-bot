@@ -1,6 +1,7 @@
 # PROJECT_MEMORY.md
 > 每次打开新会话，先读这个文件，再继续开发。
 > 新智能体请同时阅读 `docs/AGENT_ONBOARDING.md`。
+> 餐饮日报/周报自动化的 Skill 规范（输入/规则/输出/验收/禁止事项）见 `docs/SKILLS_SPEC.md`。
 
 ---
 

@@ -1,6 +1,7 @@
 # AGENT_ONBOARDING.md
 > 新进入本项目的 Claude / Codex / 其他智能体必读。
 > 读完再行动，不要一上来就重写代码。
+> 业务规则速查见餐饮日报/周报自动化 Skill 规范：`docs/SKILLS_SPEC.md`。
 
 ---
 

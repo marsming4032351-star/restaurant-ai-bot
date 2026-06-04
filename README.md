@@ -24,6 +24,8 @@ GitHub private repo：
 新开发者 / 新智能体进入项目后的第一步：
 先读 `PROJECT_MEMORY.md`、`README.md`、`docs/AGENT_ONBOARDING.md`、`docs/WORKFLOWS.md`。
 
+> 📐 餐饮日报/周报自动化的 **Skill 规范**（输入/规则/输出/验收/禁止事项）见 `docs/SKILLS_SPEC.md`，便于 Agent 直接理解业务规则。
+
 ---
 
 ## 1. 项目用途

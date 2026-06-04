@@ -153,6 +153,7 @@ git push origin main
 | `.env` | 凭证（不打印，不提交） |
 | `docs/WORKFLOWS.md` | 完整流程说明 |
 | `docs/AGENT_ONBOARDING.md` | 禁止事项和接入规范 |
+| `docs/SKILLS_SPEC.md` | 餐饮日报/周报自动化 Skill 规范（输入/规则/输出/验收/禁止事项） |
 
 ---
 
