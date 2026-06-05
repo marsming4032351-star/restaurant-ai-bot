@@ -154,6 +154,9 @@ git push origin main
 | `docs/WORKFLOWS.md` | 完整流程说明 |
 | `docs/AGENT_ONBOARDING.md` | 禁止事项和接入规范 |
 | `docs/SKILLS_SPEC.md` | 餐饮日报/周报自动化 Skill 规范（输入/规则/输出/验收/禁止事项） |
+| `docs/product_panorama.md` | 产品全景图：数据流、模块状态、未来架构 |
+| `docs/product_health_check.md` | 产品体检报告：当前能力、风险点、优化任务 |
+| `docs/data_schema.md` | 数据字段字典与事实表（daily_facts）说明 |
 
 ---
 

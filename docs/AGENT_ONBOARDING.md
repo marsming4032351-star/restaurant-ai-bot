@@ -5,6 +5,24 @@
 
 ---
 
+## 零、入场阅读顺序
+
+1. `README.md`
+2. `PROJECT_MEMORY.md`
+3. `docs/product_panorama.md`（产品全景图）
+4. `docs/product_health_check.md`（产品体检报告）
+5. 涉及数据字段时读 `docs/data_schema.md`
+6. 涉及 skill 修改时读 `docs/SKILLS_SPEC.md`
+
+**红线（务必遵守）：**
+- 不要读取、打印或提交 `.env`。
+- 不要提交 `output/`、真实业务数据、Excel、备份文件（`*.bak*` / `*.pollution_bak*`）。
+- 不要用 `git add -A`；改代码前先 `git status --short`，再按文件名精确 `git add`。
+- 日报业务日期必须来自图片表头识别日期，禁止用系统日期或文件时间。
+- 天气 API 失败不能阻断日报/周报主流程（附加层 try/except，失败降级"暂无"）。
+
+---
+
 ## 一、项目目标
 
 **餐厅经营日报数据 → 结构化沉淀 → 飞书日报/周报自动推送**
