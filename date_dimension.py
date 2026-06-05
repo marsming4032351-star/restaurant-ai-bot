@@ -16,6 +16,8 @@ from calendar import monthrange
 from datetime import date, timedelta
 from pathlib import Path
 
+import solar_terms
+
 DATA_DIR = Path(__file__).resolve().parent / "data"
 HOLIDAY_CALENDAR_PATH = DATA_DIR / "holiday_calendar_cn.json"
 
@@ -135,6 +137,7 @@ def derive_date_dimension(business_date, holiday_calendar: dict | None = None) -
 
     last_dom = last_day_of_month(d.year, d.month)
     cross_week = cross_month_week_coverage(wk_start, wk_end)
+    solar = solar_terms.solar_term_context(d)
 
     return {
         # —— 基础维度 ——
@@ -167,6 +170,16 @@ def derive_date_dimension(business_date, holiday_calendar: dict | None = None) -
         # —— 跨月周 ——
         "is_cross_month_week": cross_week["is_cross_month_week"],
         "week_month_coverage": cross_week["months"],
+        # —— 节气（确定性，来自权威表；表外年份为 no_data，不伪造）——
+        "solar_term_status": solar["solar_term_status"],
+        "is_solar_term_day": solar["is_solar_term_day"],
+        "solar_term_today": solar["solar_term_today"],
+        "current_solar_term": solar["current_solar_term"],
+        "current_solar_term_date": solar["current_solar_term_date"],
+        "days_into_current_term": solar["days_into_current_term"],
+        "next_solar_term": solar["next_solar_term"],
+        "next_solar_term_date": solar["next_solar_term_date"],
+        "days_to_next_term": solar["days_to_next_term"],
     }
 
 

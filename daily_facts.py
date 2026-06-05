@@ -67,6 +67,19 @@ _DATE_DIM_COLUMNS = [
     "is_cross_month_week", "week_month_coverage",
 ]
 _CALIBER_COLUMNS = list(FIELD_DICTIONARY.keys())
+# 节气（确定性，来自 date_dimension → solar_terms 权威表；表外年份记 no_data，不伪造）
+_SOLAR_COLUMNS = [
+    "solar_term_status", "is_solar_term_day", "solar_term_today",
+    "current_solar_term", "current_solar_term_date", "days_into_current_term",
+    "next_solar_term", "next_solar_term_date", "days_to_next_term",
+]
+# 天气（高德, 可降级；business_date 为过去日期时当天天气记"暂无"，不伪造）
+_WEATHER_COLUMNS = [
+    "weather_status", "weather_city",
+    "weather_for_business_date", "business_date_weather_note",
+    "live_observed_at", "live_weather", "live_temperature_c", "live_wind",
+    "forecast_summary",
+]
 _SOURCE_COLUMNS = [
     "source_image_filename", "source_image_hash", "source_image_header_date",
     "vlm_confidence", "vlm_model_name", "parse_version", "pipeline_version",
@@ -74,7 +87,9 @@ _SOURCE_COLUMNS = [
 FACT_COLUMNS = (
     ["business_date", "store_name"]
     + _DATE_DIM_COLUMNS
+    + _SOLAR_COLUMNS
     + _CALIBER_COLUMNS
+    + _WEATHER_COLUMNS
     + _SOURCE_COLUMNS
     + ["ingested_at", "ingest_mode"]
 )
@@ -144,21 +159,39 @@ def _num(v):
         return None
 
 
+def _summarize_forecast(weather: dict) -> str:
+    """把高德预报数组压成一行可读摘要（用于落库/弱参考），无数据返回空串。"""
+    casts = weather.get("forecast") or []
+    parts = []
+    for c in casts[:4]:
+        d = c.get("date") or ""
+        dw = c.get("day_weather") or ""
+        nt = c.get("night_temp_c")
+        dt = c.get("day_temp_c")
+        if d and dw:
+            parts.append(f"{d}:{dw} {nt}~{dt}℃")
+    return "; ".join(parts)
+
+
 def build_fact_record(
     business_date,
     store_name: str,
     metrics: dict | None = None,
     source: dict | None = None,
     holiday_calendar: dict | None = None,
+    context: dict | None = None,
 ) -> dict:
-    """组装一条 fact 记录：日期维度（派生）+ 口径指标 + 来源/版本。
+    """组装一条 fact 记录：日期维度（派生）+ 节气 + 口径指标 + 天气 + 来源/版本。
 
     metrics: 口径字段 dict（键见 FIELD_DICTIONARY），缺失留空不伪造。
     source:  source_image_filename / source_image_hash / source_image_header_date /
              vlm_confidence / vlm_model_name 等。
+    context: 运营上下文 dict（main._build_ops_context 产出），含 solar_term / weather。
+             节气以 date_dimension 派生为准；天气从 context.weather 落库，缺失记"暂无"。
     """
     metrics = metrics or {}
     source = source or {}
+    context = context or {}
     cal = holiday_calendar if holiday_calendar is not None else load_holiday_calendar()
     dim = derive_date_dimension(business_date, cal)
 
@@ -168,8 +201,22 @@ def build_fact_record(
         if col == "week_month_coverage":
             val = json.dumps(val, ensure_ascii=False)
         rec[col] = val
+    # 节气：以 date_dimension 派生为单一真相源（确定性）
+    for col in _SOLAR_COLUMNS:
+        rec[col] = dim.get(col, "")
     for col in _CALIBER_COLUMNS:
         rec[col] = metrics.get(col, "")
+    # 天气：从 context.weather 落库，缺失/降级记"暂无"，绝不伪造
+    weather = context.get("weather") or {}
+    rec["weather_status"] = weather.get("weather_status", "")
+    rec["weather_city"] = weather.get("weather_city", "")
+    rec["weather_for_business_date"] = weather.get("weather_for_business_date", "")
+    rec["business_date_weather_note"] = weather.get("business_date_weather_note", "")
+    rec["live_observed_at"] = weather.get("live_observed_at") or ""
+    rec["live_weather"] = weather.get("live_weather", "")
+    rec["live_temperature_c"] = weather.get("live_temperature_c", "")
+    rec["live_wind"] = weather.get("live_wind", "")
+    rec["forecast_summary"] = _summarize_forecast(weather)
     rec["source_image_filename"] = source.get("source_image_filename", "")
     rec["source_image_hash"] = source.get("source_image_hash", "")
     rec["source_image_header_date"] = source.get("source_image_header_date", "")

@@ -40,3 +40,14 @@ FIELD_ALIASES = {
 
 # 周报日期校验：默认允许缺日期发送，但必须在周报中醒目标注缺失日期。
 STRICT_WEEKLY_DATE_CHECK = os.getenv("STRICT_WEEKLY_DATE_CHECK", "false").lower() in {"1", "true", "yes", "y"}
+
+# ---------- 天气（运营上下文，可选附加层）----------
+# 默认高德天气 API（restapi.amap.com）。未配置 key 时天气全部记"暂无"，不伪造、不阻断日报主流程。
+# 注意：高德免费版只有"实时实况 + 未来预报"，没有历史天气；business_date 若是过去日期，
+# 当日实况记"暂无（无历史天气）"，只把采集时刻实况 + 预报作为弱参考。
+WEATHER_ENABLED = os.getenv("WEATHER_ENABLED", "true").lower() in {"1", "true", "yes", "y"}
+WEATHER_PROVIDER = os.getenv("WEATHER_PROVIDER", "amap")          # 目前支持 amap
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")               # 高德 Web 服务 key（不打印、不提交）
+WEATHER_CITY_ADCODE = os.getenv("WEATHER_CITY_ADCODE", "110102")  # 默认北京西城区（马连道所在）
+WEATHER_CITY_NAME = os.getenv("WEATHER_CITY_NAME", "北京市西城区")
+WEATHER_TIMEOUT = float(os.getenv("WEATHER_TIMEOUT", "8"))

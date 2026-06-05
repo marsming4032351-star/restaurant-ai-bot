@@ -62,6 +62,14 @@ ls -la data/store_history.csv .env
 - 详见 `docs/date_and_metric_policy.md` 与 `docs/data_schema.md`。
 - 入库为 try/except 包裹的附加层，失败不影响 V1 日报主流程，可整体回退。
 
+### 运营上下文：节气 + 天气（2026-06-05 新增，附加层）
+
+- 每日日报附带运营上下文，由 `main._build_ops_context(business_date)` 产出，经 `daily.context` 注入日报 JSON，再落库 `daily_facts.csv`、并进 AI 诊断建议（`prompts/diagnose.txt`）。
+- **节气（确定性）**：单一真相源 `data/solar_terms_cn.json`（权威发布日期），经 `solar_terms.py` / `date_dimension.py` 派生；禁止用公式近似，表外年份记 `no_data`。
+- **天气（高德，可降级）**：`weather_amap.py` 调高德天气 API；免费版无历史天气，`business_date` 多为过去日期，故当日天气记"暂无"，绝不把采集日天气当业务日天气；仅实况+预报作弱参考。
+- `.env` 需配 `WEATHER_API_KEY`（高德 Web 服务 key）才有实况/预报；未配置则全部"暂无"，不伪造、不报错、不阻断主流程。
+- 详见 `docs/SKILLS_SPEC.md` §13、`docs/data_schema.md` §3.5。
+
 ### 2026-06-01 真实流程验证结论
 
 - 项目已从“能识别日报”升级为“能防止日期污染历史数据，并能在周一收到周日数据后自动触发上周周报”。

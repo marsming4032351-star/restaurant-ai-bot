@@ -47,3 +47,20 @@ test/*.png
 !data/pipeline_state.json
 data/watch_state.json
 .gstack/
+
+# 2026-06-05 补充：堵住后缀改写绕过的真实业务数据/产物/备份
+# （.bak_*/.pollution_bak_* 后缀会把 .csv/.xlsx/.json 扩展名移走，绕过上面的规则）
+*.bak
+*.bak.*
+*.bak_*
+*.pollution_bak
+*.pollution_bak_*
+pollution_bak/
+output/
+data/store_history.csv
+data/daily_facts*.csv
+data/pipeline_log*.csv
+data/data_correction_log.md
+*.xlsx
+*.xls
+.env

@@ -383,6 +383,7 @@ def _write_daily_facts_hook(
         mc = daily.get("member_consumption", {}) or {}
         tr = daily.get("traffic", {}) or {}
         dv = daily.get("derived", {}) or {}
+        ops_context = daily.get("context", {}) or {}  # 节气+天气，main 注入；缺失则空，落库记"暂无"
 
         def g(d, k):
             v = d.get(k)
@@ -421,7 +422,9 @@ def _write_daily_facts_hook(
             "vlm_confidence": "",
             "vlm_model_name": getattr(config, "VISION_MODEL", "") or "",
         }
-        record = _facts.build_fact_record(business_date, store, metrics=metrics, source=source)
+        record = _facts.build_fact_record(
+            business_date, store, metrics=metrics, source=source, context=ops_context,
+        )
         mode = "amend" if force else "append"
         reason = "--force 重跑更正" if force else ""
         # 以 config.DATA_DIR 为基准解析路径，保证测试 patch DATA_DIR 时不污染真实 data/

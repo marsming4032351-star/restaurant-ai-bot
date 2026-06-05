@@ -68,6 +68,37 @@
 > ⚠️ 口径分层：**营收语义 / 渠道结构 / 支付结构 / 折扣结构** 是四套不同口径。
 > 例如「优惠消费」属于支付结构，不能和「堂食/外卖/线上」（渠道结构）放进同一张饼图当成同口径。
 
+## 3.5 运营上下文：节气 + 天气（2026-06-05 新增，附加层）
+
+> 这两组字段是**附加运营上下文**，由 `main._build_ops_context(business_date)` 产出，
+> 经 `daily.context` 注入日报 JSON，再由 `daily_facts.build_fact_record(..., context=...)` 落库。
+> 任何失败都不阻断 V1 主流程；缺数据时诚实记 `no_data` / `暂无`，**绝不伪造**。
+
+### 节气（确定性，单一真相源 = `data/solar_terms_cn.json`）
+经 `date_dimension.py` → `solar_terms.py` 派生；表外年份记 `no_data`，不用公式近似。
+
+| 字段 | 含义 |
+|------|------|
+| solar_term_status | `ok` / `no_data`（该年节气表未覆盖） |
+| is_solar_term_day | 当天是否恰逢节气 |
+| solar_term_today | 当天恰逢的节气名（否则空） |
+| current_solar_term / current_solar_term_date | 当前所处节气及其日期 |
+| days_into_current_term | 距当前节气已过天数（节气当天=0） |
+| next_solar_term / next_solar_term_date / days_to_next_term | 下一个节气、日期、剩余天数 |
+
+### 天气（高德，可降级）
+高德免费版无历史天气；`business_date` 通常是过去日期，故**当日天气多记"暂无"**，
+仅把采集时刻实况与预报作为弱参考，绝不把采集日天气当成业务日天气。
+
+| 字段 | 含义 |
+|------|------|
+| weather_status | `ok` / `unavailable` / `error` |
+| weather_city | 天气城市（默认北京市西城区，马连道所在） |
+| weather_for_business_date | 业务日当天天气；过去日期记"暂无（无历史天气）" |
+| business_date_weather_note | 业务日天气口径说明（为何暂无） |
+| live_observed_at / live_weather / live_temperature_c / live_wind | 采集时刻实况（弱参考） |
+| forecast_summary | 采集日及未来数天预报摘要（用于明日经营建议弱参考） |
+
 ## 4. 来源与版本字段（req 7）
 
 | 字段 | 含义 |

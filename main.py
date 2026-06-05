@@ -29,6 +29,37 @@ import feishu_bot
 import history
 
 
+def _build_ops_context(business_date) -> dict:
+    """运营上下文：节气(确定性) + 天气(高德, 可降级)。
+
+    附加层：任何失败都不阻断日报主流程；失败时返回 error 标注，不伪造数据。
+    business_date 来自图片表头，绝不被系统/采集日期覆盖。
+    """
+    ctx: dict = {}
+    try:
+        import date_dimension
+        dim = date_dimension.derive_date_dimension(business_date)
+        ctx["solar_term"] = {
+            "status": dim.get("solar_term_status"),
+            "is_solar_term_day": dim.get("is_solar_term_day"),
+            "solar_term_today": dim.get("solar_term_today"),
+            "current_solar_term": dim.get("current_solar_term"),
+            "current_solar_term_date": dim.get("current_solar_term_date"),
+            "days_into_current_term": dim.get("days_into_current_term"),
+            "next_solar_term": dim.get("next_solar_term"),
+            "next_solar_term_date": dim.get("next_solar_term_date"),
+            "days_to_next_term": dim.get("days_to_next_term"),
+        }
+    except Exception as e:  # noqa: BLE001
+        ctx["solar_term"] = {"status": "error", "error": str(e)}
+    try:
+        import weather_amap
+        ctx["weather"] = weather_amap.build_weather_context(business_date)
+    except Exception as e:  # noqa: BLE001
+        ctx["weather"] = {"weather_status": "error", "weather_unavailable_reason": str(e)}
+    return ctx
+
+
 def find_default_file(report_date: date) -> Path:
     """约定:data/YYYYMMDD.xlsx 或 data/YYYY-MM-DD.csv 都行,自动找。"""
     candidates = [
@@ -57,6 +88,9 @@ def run(report_date: date | None, store_id: str,
     daily = P.enrich_with_history(daily)
 
     actual_date = daily["meta"]["date"]   # parser 抓到的真实日期
+
+    # 1.5 运营上下文：天气 + 节气（附加层，失败不阻断主流程；business_date 来自图片表头）
+    daily["context"] = _build_ops_context(actual_date)
 
     # 2. AI 分析
     print(f"[2/4] AI 诊断 (model={config.LLM_MODEL})")
