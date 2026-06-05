@@ -607,6 +607,8 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 1. **先读文档，再动代码**
    - `PROJECT_MEMORY.md` — 项目状态、已完成功能、当前已知问题
    - `docs/AGENT_ONBOARDING.md` — 完整接入说明（禁止事项 / 流程 / 健康检查）
+   - `docs/product_panorama.md` — 产品全景图（数据流 / 模块状态 / 未来架构，Mermaid）
+   - `docs/product_health_check.md` — 产品体检报告（10 维度评分 / 路线图 / 优化任务）
 
 2. **确认当前功能状态**
    ```bash
