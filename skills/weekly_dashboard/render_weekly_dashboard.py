@@ -325,6 +325,16 @@ def _extract_report_values(payload: dict) -> dict:
         "craft_beer": pick(dessert, "craft_beer"),
     }
 
+    # 运营上下文（天气 / 节气）——已存在于 report_*.json 的 daily.context。
+    # 只读取，不伪造；缺失字段保持 None，后续聚合时统一降级为「暂无」。
+    context = daily.get("context", {}) or {}
+    weather = context.get("weather", {}) or {}
+    solar = context.get("solar_term", {}) or {}
+    values["weather_for_business_date"] = weather.get("weather_for_business_date")
+    values["weather_status"] = weather.get("weather_status")
+    values["solar_term_today"] = solar.get("solar_term_today")
+    values["current_solar_term"] = solar.get("current_solar_term")
+
     return values
 
 
@@ -576,6 +586,34 @@ def load_weekly_enriched_fields(
         "has_duck_module": any(weekly[key] is not None for key in ("duck_total", "duck_dine_in", "duck_online", "duck_mini", "duck_sauce", "sesame_cake")),
         "has_category_module": any(value is not None for value in weekly["top_categories"].values()),
     }
+
+    # 天气 / 节气观察：节气确定性派生；天气优先用 report_*.json 的业务日天气，
+    # 高德免费版无历史天气，过去日期多为「暂无」→ 诚实降级，绝不伪造。
+    weather_samples = []
+    for row in daily:
+        wt = row.get("weather_for_business_date")
+        if wt is not None and not weekly_report._is_blank_weather(wt):
+            text = str(wt).strip()
+            if text not in weather_samples:
+                weather_samples.append(text)
+    agg_weather = "；".join(weather_samples) if weather_samples else None
+    try:
+        observation = weekly_report.build_weather_solar_observation(
+            start_date, end_date, weather_text=agg_weather
+        )
+    except Exception:  # 附加层失败不得影响看板
+        observation = {
+            "solar_term_status": "no_data",
+            "solar_term_text": "暂无",
+            "weather_text": "本周天气数据不完整，仅作弱参考。",
+            "weather_available": False,
+            "hints": [],
+            "lines": ["本周节气：暂无", "天气概况：本周天气数据不完整，仅作弱参考。"],
+        }
+    weekly["weather_solar"] = observation
+    weekly["solar_term_text"] = observation["solar_term_text"]
+    weekly["weather_text"] = observation["weather_text"]
+    weekly["weather_solar_note"] = "；".join(observation["lines"])
     return weekly
 
 
@@ -653,6 +691,10 @@ def weekly_context(
         strengths.append(score)
 
     diagnosis = build_weekly_diagnosis(enhanced, missing_dates, stats)
+    # 把「本周天气 / 节气观察」置于诊断面板顶部（HTML + PNG 自动渲染、自动撑高）。
+    ws_lines = (enhanced.get("weather_solar") or {}).get("lines") or []
+    if ws_lines:
+        diagnosis = [f"🌤️ {line}" for line in ws_lines] + diagnosis
 
     return {
         "store": store,
