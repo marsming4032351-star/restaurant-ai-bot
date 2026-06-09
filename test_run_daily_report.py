@@ -172,13 +172,14 @@ class RunDailyReportTests(unittest.TestCase):
                  patch.object(R.image_to_excel, "build_excel", side_effect=fake_build_excel), \
                  patch.dict("sys.modules", {"main": SimpleNamespace(run=fake_main_run)}), \
                  patch.object(R, "store_history_has_row", return_value=False), \
-                 patch.object(R, "run_git_commit_push", return_value=None), \
+                 patch.object(R, "run_git_commit_push", return_value=None) as git_sync, \
                  patch.object(R, "now_iso", return_value="2026-06-01T06:00:00+08:00"), \
                  patch.object(R.weekly_auto, "today_in_business_timezone", return_value=date(2026, 6, 1)), \
                  patch.object(R.weekly_auto, "check_and_push", side_effect=lambda store, completed_date: weekly_calls.append((store, completed_date)) or {"triggered": True, "start_date": "2026-05-25", "end_date": "2026-05-31"}):
                 exit_code = R.run_daily_report(args)
 
             self.assertEqual(exit_code, 0)
+            git_sync.assert_not_called()
             self.assertEqual(len(main_calls), 1)
             self.assertEqual(weekly_calls, [("便宜坊马连道", "2026-05-31")])
             state = json.loads(pipeline_state.read_text(encoding="utf-8"))
@@ -194,6 +195,59 @@ class RunDailyReportTests(unittest.TestCase):
             self.assertIn("便宜坊马连道_2026-05-31.xlsx", rows[-1]["excel_file"])
             self.assertIn("report_MLD_2026-05-31.json", rows[-1]["report_file"])
             self.assertIn("2026-05-31", (data_dir / "store_history.csv").read_text(encoding="utf-8"))
+
+    def test_git_sync_flag_runs_git_commit_push_after_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            image = base / "daily.png"
+            image.write_bytes(b"fake image")
+            pipeline_state = base / "pipeline_state.json"
+            pipeline_log = base / "pipeline_log.csv"
+            data_dir = base / "data"
+            output_dir = base / "output"
+            output_dir.mkdir()
+
+            def fake_build_excel(_daily_json, business_date, output_dir_arg):
+                path = output_dir_arg / f"便宜坊马连道_{business_date}.xlsx"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("fake excel", encoding="utf-8")
+                return path
+
+            def fake_main_run(_report_date, _store_id, _excel_path, args_ns=None):
+                store_history = data_dir / "store_history.csv"
+                store_history.write_text(
+                    "date,store_name,revenue\n"
+                    "2026-05-31,便宜坊马连道,1\n",
+                    encoding="utf-8",
+                )
+
+            args = SimpleNamespace(
+                image=str(image),
+                input_folder=str(base),
+                store="便宜坊马连道",
+                store_id="MLD",
+                date="2026-06-01",
+                force=False,
+                git_sync=True,
+            )
+
+            with patch.object(R, "PIPELINE_STATE", pipeline_state), \
+                 patch.object(R, "PIPELINE_LOG", pipeline_log), \
+                 patch.object(R.config, "DATA_DIR", data_dir), \
+                 patch.object(R.config, "OUTPUT_DIR", output_dir), \
+                 patch.object(R, "read_startup_context", return_value=None), \
+                 patch.object(R, "recognize_image", return_value={"业务日期": "2026-05-31", "本日收入": 1}), \
+                 patch.object(R.image_to_excel, "build_excel", side_effect=fake_build_excel), \
+                 patch.dict("sys.modules", {"main": SimpleNamespace(run=fake_main_run)}), \
+                 patch.object(R, "store_history_has_row", return_value=False), \
+                 patch.object(R, "run_git_commit_push", return_value=None) as git_sync, \
+                 patch.object(R, "now_iso", return_value="2026-06-01T06:00:00+08:00"), \
+                 patch.object(R.weekly_auto, "today_in_business_timezone", return_value=date(2026, 6, 2)), \
+                 patch.object(R.weekly_auto, "check_and_push", return_value={"triggered": False, "reason": "not_monday"}):
+                exit_code = R.run_daily_report(args)
+
+            self.assertEqual(exit_code, 0)
+            git_sync.assert_called_once()
 
     def test_missing_image_header_date_aborts_before_excel_and_push(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -220,11 +274,12 @@ class RunDailyReportTests(unittest.TestCase):
                  patch.object(R, "recognize_image", return_value={"本日收入": 1}), \
                  patch.object(R.image_to_excel, "build_excel") as build_excel, \
                  patch.dict("sys.modules", {"main": SimpleNamespace(run=lambda *a, **k: self.fail("main.run should not be called"))}), \
-                 patch.object(R, "run_git_commit_push", return_value=None), \
+                 patch.object(R, "run_git_commit_push", return_value=None) as git_sync, \
                  patch.object(R, "now_iso", return_value="2026-06-01T06:00:00+08:00"):
                 exit_code = R.run_daily_report(args)
 
             self.assertEqual(exit_code, 1)
+            git_sync.assert_not_called()
             build_excel.assert_not_called()
             self.assertFalse((data_dir / "store_history.csv").exists())
             with pipeline_log.open(encoding="utf-8", newline="") as f:
@@ -287,6 +342,53 @@ class RunDailyReportTests(unittest.TestCase):
             self.assertIn("--image", cmd)
             self.assertIn(str(image), cmd)
 
+    def test_watcher_runs_daily_report_with_project_venv_python(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "daily.png"
+            image.write_bytes(b"abc")
+
+            with patch.object(W.subprocess, "run") as run:
+                W.run_report(image, "便宜坊马连道")
+
+            cmd = run.call_args.args[0]
+            self.assertEqual(cmd[0], str(W.PROJECT_PYTHON))
+            self.assertNotIn("/Library/Developer/CommandLineTools/usr/bin/python3", cmd)
+
+    def test_watcher_passes_proxy_environment_to_daily_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "daily.png"
+            image.write_bytes(b"abc")
+
+            with patch.object(W.subprocess, "run") as run:
+                W.run_report(image, "便宜坊马连道")
+
+            env = run.call_args.kwargs["env"]
+            self.assertEqual(env["HTTP_PROXY"], "http://127.0.0.1:7890")
+            self.assertEqual(env["HTTPS_PROXY"], "http://127.0.0.1:7890")
+
+    def test_watcher_overrides_stale_proxy_environment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "daily.png"
+            image.write_bytes(b"abc")
+            stale_proxy = "http://127.0.0.1:7897"
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "HTTP_PROXY": stale_proxy,
+                    "HTTPS_PROXY": stale_proxy,
+                    "http_proxy": stale_proxy,
+                    "https_proxy": stale_proxy,
+                },
+            ), patch.object(W.subprocess, "run") as run:
+                W.run_report(image, "便宜坊马连道")
+
+            env = run.call_args.kwargs["env"]
+            self.assertEqual(env["HTTP_PROXY"], "http://127.0.0.1:7890")
+            self.assertEqual(env["HTTPS_PROXY"], "http://127.0.0.1:7890")
+            self.assertEqual(env["http_proxy"], "http://127.0.0.1:7890")
+            self.assertEqual(env["https_proxy"], "http://127.0.0.1:7890")
+
     def test_find_candidate_images_sorted_by_mtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
@@ -308,7 +410,9 @@ class RunDailyReportTests(unittest.TestCase):
         status = Path("scripts/status_watcher_launchd.sh").read_text(encoding="utf-8")
 
         self.assertIn("com.restaurant.daily-watcher", install)
-        self.assertIn("/usr/bin/python3", install)
+        self.assertIn("/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python", install)
+        self.assertIn("<key>EnvironmentVariables</key>", install)
+        self.assertIn("http://127.0.0.1:7890", install)
         self.assertIn("/Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py", install)
         self.assertIn("/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log", install)
         self.assertIn("/Users/ming/Restaurant/daily-input/马连道", install)

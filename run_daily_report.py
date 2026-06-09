@@ -518,10 +518,11 @@ def run_daily_report(args: argparse.Namespace) -> int:
         commit_files = [PIPELINE_STATE, PIPELINE_LOG]
         if weekly_state_changed and weekly_auto.WEEKLY_STATE.exists():
             commit_files.append(weekly_auto.WEEKLY_STATE)
-        run_git_commit_push(
-            commit_files,
-            f"日报推送完成：{business_date} {args.store}",
-        )
+        if getattr(args, "git_sync", False):
+            run_git_commit_push(
+                commit_files,
+                f"日报推送完成：{business_date} {args.store}",
+            )
         return 0
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
@@ -543,13 +544,14 @@ def run_daily_report(args: argparse.Namespace) -> int:
         )
         print("[daily] 失败，已写入 pipeline_log.csv", file=sys.stderr)
         traceback.print_exc()
-        try:
-            run_git_commit_push(
-                [PIPELINE_LOG],
-                f"记录日报失败：{business_date} {args.store}",
-            )
-        except Exception as git_exc:
-            print(f"[git] 失败日志提交/推送失败: {git_exc}", file=sys.stderr)
+        if getattr(args, "git_sync", False):
+            try:
+                run_git_commit_push(
+                    [PIPELINE_LOG],
+                    f"记录日报失败：{business_date} {args.store}",
+                )
+            except Exception as git_exc:
+                print(f"[git] 失败日志提交/推送失败: {git_exc}", file=sys.stderr)
         return 1
 
 
@@ -561,6 +563,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--store-id", default="MLD", help="内部门店编号，用于 report 文件名")
     parser.add_argument("--date", required=False, help="处理日期 YYYY-MM-DD；日报业务日期以图片表头识别结果为准")
     parser.add_argument("--force", action="store_true", help="允许重跑已推送日期，并覆盖历史重复记录")
+    parser.add_argument("--git-sync", action="store_true", help="日报结束后自动 git commit/push；默认关闭")
     return parser.parse_args()
 
 

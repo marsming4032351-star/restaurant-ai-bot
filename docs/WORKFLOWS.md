@@ -215,6 +215,7 @@ plist 配置：
 
 - `ProgramArguments`: `/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python /Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py`
 - `WorkingDirectory`: `/Users/ming/Restaurant/restaurant-ai-bot`
+- `EnvironmentVariables`: `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` 均为 `http://127.0.0.1:7890`
 - `StandardOutPath`: `/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log`
 - `StandardErrorPath`: `/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log`
 - `KeepAlive=true`
@@ -222,7 +223,7 @@ plist 配置：
 
 安装脚本会自动创建 `/Users/ming/Restaurant/daily-input/马连道` 和日志目录，并自动 `launchctl unload/load` 或 `bootstrap/kickstart`，让服务立即生效。以后 macOS 登录后会自动监听。
 
-当前新电脑检查结果：`~/Library/LaunchAgents/com.restaurant.daily-watcher.plist` 已存在，watcher 使用项目 `.venv/bin/python`，监听 `/Users/ming/Restaurant/daily-input/马连道`。若最近日志仍显示旧路径 `/Users/ming/Desktop/临时/马连道` 的 `PermissionError`，或 plist 仍显示 `/usr/bin/python3`，说明运行中的服务需要重载；重新执行安装脚本即可刷新 plist 和进程。
+当前新电脑检查结果：`~/Library/LaunchAgents/com.restaurant.daily-watcher.plist` 已存在，watcher 使用项目 `.venv/bin/python`，监听 `/Users/ming/Restaurant/daily-input/马连道`。watcher 子进程也固定使用项目 `.venv/bin/python`，并强制覆盖 `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` 为 `http://127.0.0.1:7890`，避免继承旧 `127.0.0.1:7897` 代理。若最近日志仍显示旧路径 `/Users/ming/Desktop/临时/马连道` 的 `PermissionError`，或 plist 仍显示 `/usr/bin/python3`，说明运行中的服务需要重载；重新执行安装脚本即可刷新 plist 和进程。
 
 新电脑固定 Python 路径：
 
@@ -356,7 +357,9 @@ scripts/status_watcher_launchd.sh
 - 监听脚本不改 `main.py`、`weekly_report.py` 或日报主链路。
 - 监听脚本只调用 `run_daily_report.py`。
 - 监听脚本不直接提交真实图片、Excel、图表、日志或 `store_history.csv`。
-- 监听脚本不应自动 `git commit` / `git push`；Git 提交必须由用户确认后执行。
+- 监听脚本不应自动 `git commit` / `git push`；`run_daily_report.py` 默认不自动 Git 同步，只有显式 `--git-sync` 才允许日报流程执行 `git commit` / `git push`。
+- 飞书推送成功就是日报业务推送成功；Git 同步属于发布管理动作，必须与日报主流程解耦，不能依赖 Git 成功与否判断业务是否成功。
+- 不得读取、打印或写入 `.env`、token、webhook、secret、app secret。
 - `data/watch_state.json` 是本地运行态去重文件，不进入 Git。
 
 ---

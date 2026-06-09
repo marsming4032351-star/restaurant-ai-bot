@@ -14,8 +14,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -24,6 +24,8 @@ import run_daily_report
 
 WATCH_DIR = run_daily_report.INPUT_DIR
 WATCH_STATE = run_daily_report.BASE_DIR / "data" / "watch_state.json"
+PROJECT_PYTHON = run_daily_report.BASE_DIR / ".venv" / "bin" / "python"
+DEFAULT_PROXY = "http://127.0.0.1:7890"
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
 
@@ -97,7 +99,7 @@ def mark_processed(state: dict, path: Path, signature: dict, processed_at: str) 
 
 def run_report(image_path: Path, store: str, processing_date: str | None = None) -> None:
     cmd = [
-        sys.executable,
+        str(PROJECT_PYTHON),
         str(run_daily_report.BASE_DIR / "run_daily_report.py"),
         "--image",
         str(image_path),
@@ -106,7 +108,12 @@ def run_report(image_path: Path, store: str, processing_date: str | None = None)
     ]
     if processing_date:
         cmd.extend(["--date", processing_date])
-    subprocess.run(cmd, cwd=run_daily_report.BASE_DIR, check=True)
+    env = os.environ.copy()
+    env["HTTP_PROXY"] = DEFAULT_PROXY
+    env["HTTPS_PROXY"] = DEFAULT_PROXY
+    env["http_proxy"] = DEFAULT_PROXY
+    env["https_proxy"] = DEFAULT_PROXY
+    subprocess.run(cmd, cwd=run_daily_report.BASE_DIR, check=True, env=env)
 
 
 def process_once(folder: Path, state_path: Path, store: str, processing_date: str | None = None) -> int:

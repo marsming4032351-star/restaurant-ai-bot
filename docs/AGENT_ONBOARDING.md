@@ -240,6 +240,8 @@ crontab -l
 - Python：`/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python`
 - launchd watcher：必须使用项目 `.venv/bin/python`，不要回退到 `/usr/bin/python3`
 - Git 远程代理：当前本机端口是 `127.0.0.1:7890`，旧端口 `127.0.0.1:7897` 曾导致 fetch/push 失败
+- watcher 子进程必须固定使用项目 `.venv/bin/python`，并强制覆盖 `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` 为 `http://127.0.0.1:7890`
+- launchd plist 必须写入同样的 `7890` 代理环境
 
 如需 Git 远程操作，优先使用临时代理，不修改全局配置：
 
@@ -256,7 +258,7 @@ git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 pus
 
 如果要修改功能，先向用户说明方案、影响范围和验证方式，再动代码。不要打印 `.env` 敏感值，不要直接写入 crontab，不要把真实数据加入 git。
 
-watcher 自动流程不应该自动 git commit/push。任何 Git 提交和推送必须由用户确认后执行，且只允许 `git add <具体文件>`。
+watcher 自动流程不应该自动 git commit/push。`run_daily_report.py` 默认不自动 git commit/push，只有显式 `--git-sync` 才允许日报流程执行 Git 同步。飞书推送成功就是日报业务推送成功；Git 同步属于发布管理动作，必须与日报主流程解耦，不能用 Git 成功与否判断日报业务是否成功。任何 Git 提交和推送必须由用户确认后执行，且只允许 `git add <具体文件>`。不要读取、打印或写入 `.env`、token、webhook、secret、app secret。
 
 ---
 

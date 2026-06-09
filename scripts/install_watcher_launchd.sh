@@ -6,6 +6,7 @@ PROJECT_DIR="/Users/ming/Restaurant/restaurant-ai-bot"
 SCRIPT_PATH="/Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py"
 PYTHON_PATH="/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python"
 INPUT_DIR="/Users/ming/Restaurant/daily-input/马连道"
+PROXY_URL="http://127.0.0.1:7890"
 LOG_DIR="$PROJECT_DIR/logs"
 LOG_PATH="/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log"
 PLIST_PATH="$HOME/Library/LaunchAgents/$LABEL.plist"
@@ -32,6 +33,18 @@ cat > "$PLIST_PATH" <<PLIST
 
   <key>WorkingDirectory</key>
   <string>$PROJECT_DIR</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HTTP_PROXY</key>
+    <string>$PROXY_URL</string>
+    <key>HTTPS_PROXY</key>
+    <string>$PROXY_URL</string>
+    <key>http_proxy</key>
+    <string>$PROXY_URL</string>
+    <key>https_proxy</key>
+    <string>$PROXY_URL</string>
+  </dict>
 
   <key>StandardOutPath</key>
   <string>$LOG_PATH</string>

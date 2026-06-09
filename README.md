@@ -48,7 +48,7 @@ Python 运行环境使用项目内独立虚拟环境：
 /Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python
 ```
 
-`launchd` watcher 已改为使用上述 `.venv/bin/python`，避免新电脑 arm64 Python 与旧环境依赖架构不一致。进入项目后的第一轮健康检查建议执行：
+`launchd` watcher 已改为使用上述 `.venv/bin/python`，避免新电脑 arm64 Python 与旧环境依赖架构不一致；watcher 子进程也必须固定使用项目 `.venv/bin/python`，不允许回退系统 Python。进入项目后的第一轮健康检查建议执行：
 
 ```bash
 git status
@@ -59,14 +59,14 @@ git config --get http.proxy
 git config --get https.proxy
 ```
 
-当前本机代理软件端口是 `127.0.0.1:7890`，不要误用旧端口 `127.0.0.1:7897`。如只想临时使用代理执行 Git 远程操作，优先使用：
+当前本机代理软件端口是 `127.0.0.1:7890`，不要误用旧端口 `127.0.0.1:7897`。watcher 子进程会强制覆盖 `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` 为 `http://127.0.0.1:7890`；`scripts/install_watcher_launchd.sh` 生成的 launchd plist 也会写入同样的 `7890` 代理环境。如只想临时使用代理执行 Git 远程操作，优先使用：
 
 ```bash
 git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 fetch origin main
 git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push origin main
 ```
 
-watcher 自动流程只负责识别截图、执行日报、写入业务状态；不应自动 `git commit` 或 `git push`。所有 Git 提交和推送必须由用户确认后，由人工或 Agent 显式执行指定文件提交。
+watcher 自动流程只负责识别截图、执行日报、写入业务状态；不应自动 `git commit` 或 `git push`。`run_daily_report.py` 默认不再自动 Git 同步，只有显式传入 `--git-sync` 才允许日报流程执行 `git commit` / `git push`。飞书推送成功就是日报业务推送成功，Git 同步属于发布管理动作，必须和日报主流程解耦，不能用 Git 成功与否判断日报业务是否成功。所有 Git 提交和推送必须由用户确认后，由人工或 Agent 显式执行指定文件提交。不要读取、打印或写入 `.env`、token、webhook、secret 或 app secret。
 
 ---
 

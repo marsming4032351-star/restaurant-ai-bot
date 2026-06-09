@@ -39,6 +39,8 @@ Git 状态：
 - launchd watcher：`~/Library/LaunchAgents/com.restaurant.daily-watcher.plist` 的 `ProgramArguments` 使用项目 `.venv/bin/python` 执行 `watch_daily_folder.py`
 - 当前本机代理端口：`127.0.0.1:7890`
 - 旧代理端口 `127.0.0.1:7897` 曾导致 `fetch/push` 失败，不要继续误用
+- watcher 子进程固定使用项目 `.venv/bin/python`，不允许回退系统 Python
+- watcher 子进程会强制覆盖 `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` 为 `http://127.0.0.1:7890`；launchd plist 也写入同样代理环境
 
 进入项目后的最小健康检查：
 
@@ -58,7 +60,7 @@ git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 fet
 git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push origin main
 ```
 
-watcher 自动流程不应自动 `git commit` / `git push`。Git 提交、推送必须由用户确认后执行，且只能 `git add <具体文件>`。
+watcher 自动流程不应自动 `git commit` / `git push`。`run_daily_report.py` 默认不自动 Git 同步，只有显式 `--git-sync` 才允许日报流程执行 `git commit` / `git push`。飞书推送成功就是日报业务推送成功；Git 同步属于发布管理动作，必须与日报主流程解耦，不能依赖 Git 成功与否判断业务是否成功。Git 提交、推送必须由用户确认后执行，且只能 `git add <具体文件>`。不得读取、打印或写入 `.env`、token、webhook、secret、app secret。
 
 ---
 
@@ -134,8 +136,8 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] 飞书互动卡片：红/黄/绿标题 + KPI 4 列 + 诊断 2×2 + 建议列表
 - [x] matplotlib 中文字体修复（Arial Unicode MS / STHeiti）
 - [x] `image_to_excel.py`：Claude 读图 → JSON → 标准 Excel
-- [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态；Git commit/push 必须由用户确认后执行
-- [x] `watch_daily_folder.py`：监听 `/Users/ming/Restaurant/daily-input/马连道` 新截图并自动触发一键日报
+- [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态；默认不自动 Git 同步，只有显式 `--git-sync` 才允许 commit/push
+- [x] `watch_daily_folder.py`：监听 `/Users/ming/Restaurant/daily-input/马连道` 新截图并自动触发一键日报；子进程固定 `.venv/bin/python` 并强制使用 `7890` 代理
 - [x] 默认日报截图输入目录已迁出 Desktop：`/Users/ming/Restaurant/daily-input/马连道`
 - [x] 日报业务日期必须来自图片表头/真实营业数据；图片表头日期识别失败时必须中止；不允许为了凑周报或补齐日期改写日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期
 - [x] `run_daily_report.py --input-folder` 和 `watch_daily_folder.py --folder` 保留手动目录覆盖能力
