@@ -28,6 +28,48 @@ GitHub private repo：
 
 ---
 
+## 新电脑环境说明（2026-06-09）
+
+当前项目固定在新电脑路径：
+
+```text
+/Users/ming/Restaurant/restaurant-ai-bot
+```
+
+日报截图输入目录：
+
+```text
+/Users/ming/Restaurant/daily-input/马连道
+```
+
+Python 运行环境使用项目内独立虚拟环境：
+
+```text
+/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python
+```
+
+`launchd` watcher 已改为使用上述 `.venv/bin/python`，避免新电脑 arm64 Python 与旧环境依赖架构不一致。进入项目后的第一轮健康检查建议执行：
+
+```bash
+git status
+which python
+.venv/bin/python -c "import openai, pydantic, pydantic_core, pandas, PIL"
+scripts/status_watcher_launchd.sh
+git config --get http.proxy
+git config --get https.proxy
+```
+
+当前本机代理软件端口是 `127.0.0.1:7890`，不要误用旧端口 `127.0.0.1:7897`。如只想临时使用代理执行 Git 远程操作，优先使用：
+
+```bash
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 fetch origin main
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push origin main
+```
+
+watcher 自动流程只负责识别截图、执行日报、写入业务状态；不应自动 `git commit` 或 `git push`。所有 Git 提交和推送必须由用户确认后，由人工或 Agent 显式执行指定文件提交。
+
+---
+
 ## 1. 项目用途
 
 - **输入**：日报截图（PNG）或已有 Excel
@@ -91,7 +133,7 @@ scripts/install_watcher_launchd.sh
 4. `run_daily_report.py` 用视觉模型识别截图，生成包含图片表头业务日期的结构化 JSON。
 5. `image_to_excel.py` 写出标准 Excel：`data/便宜坊马连道_YYYY-MM-DD.xlsx`。
 6. `main.py` 执行解析、AI 诊断、图表生成、飞书日报卡片推送、历史写入。
-7. 成功后更新 `data/pipeline_state.json` 和 `data/pipeline_log.csv`，并自动提交/推送 pipeline 状态文件。
+7. 成功后更新 `data/pipeline_state.json` 和 `data/pipeline_log.csv`；Git 提交/推送必须由用户确认后再执行。
 8. 如果当前运行日是周一，且本次真实日报日期是上一天（周日），则自动检查并推送上一自然周周报。
 
 日报业务日期必须来自图片表头/真实营业数据；图片表头日期识别失败时流程必须中止，不允许 fallback 到系统日期。不允许为了凑周报或补齐日期而修改日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实业务日期。周一只是触发时机，不是日报日期来源。
@@ -144,7 +186,8 @@ restaurant-ai-bot/
 Python 3.9+，安装依赖：
 
 ```bash
-pip3 install -r requirements.txt openai
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 ---
@@ -155,9 +198,9 @@ pip3 install -r requirements.txt openai
 
 ```bash
 git status
-git add .
+git add <具体文件>
 git commit -m "xxx"
-git push
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push origin main
 ```
 
 安全提醒：
@@ -165,6 +208,8 @@ git push
 - 不要提交真实经营数据。
 - 不要提交日志、Excel、图片、parquet 文件。
 - 提交前先用 `git status` 确认没有敏感文件进入暂存区。
+- 不要使用 `git add .` 或 `git add -A`。
+- 旧代理端口 `127.0.0.1:7897` 可能不可用；当前新电脑使用 `127.0.0.1:7890`。
 
 ---
 
@@ -574,14 +619,14 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 
 本次 `2026-05-25` 到 `2026-05-31` 周报看板图片已成功推送到飞书。运行经验如下：
 
-- Codex 环境可能无法访问 Mac 本机代理 `127.0.0.1:7897`，因此带图片上传的飞书推送建议在 Mac 本机 Terminal 执行。
+- Codex 环境可能无法访问 Mac 本机代理；当前新电脑代理端口是 `127.0.0.1:7890`，旧端口 `127.0.0.1:7897` 不要再用。
 - 推送前确认 `.env` 已配置 `FEISHU_WEBHOOK`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`，不要打印或记录真实值。
 - 如果 Python `requests` 无法解析 `open.feishu.cn`，但 `curl` 可以访问，通常说明 Python 的代理或 DNS 路径与系统命令不同。
 - 在本机 Terminal 执行前可按需设置代理：
 
 ```bash
-export HTTP_PROXY=http://127.0.0.1:7897
-export HTTPS_PROXY=http://127.0.0.1:7897
+export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7890
 ```
 
 成功命令示例：

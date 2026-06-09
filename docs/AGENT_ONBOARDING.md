@@ -206,20 +206,46 @@ tail -20 logs/weekly_report.log
 # 1. 确认 Git 状态，检查是否有未提交或敏感文件
 git status
 
-# 2. 确认历史数据存在
+# 2. 确认 Python 和新电脑 .venv 可用
+which python
+.venv/bin/python -c "import openai, pydantic, pydantic_core, pandas, PIL"
+
+# 3. 确认 launchd watcher 状态
+scripts/status_watcher_launchd.sh
+
+# 4. 只读检查 Git 代理，当前本机代理端口应为 7890，不要误用旧端口 7897
+git config --get http.proxy
+git config --get https.proxy
+
+# 5. 确认历史数据存在
 ls -la data/store_history.csv
 
-# 3. 查看最近历史记录
+# 6. 查看最近历史记录
 python3 -c "import history; history.show_recent(7)"
 
-# 4. 确认 .env 配置存在（不要打印内容）
+# 7. 确认 .env 配置存在（不要打印内容）
 ls -la .env
 
-# 5. 验证周报功能（不推送）
+# 8. 验证周报功能（不推送）
 python3 weekly_report.py --last-week --dry-run
 
-# 6. 查看 crontab 状态，只读检查，不直接写入
+# 9. 查看 crontab 状态，只读检查，不直接写入
 crontab -l
+```
+
+新电脑固定路径：
+
+- 项目：`/Users/ming/Restaurant/restaurant-ai-bot`
+- 日报输入目录：`/Users/ming/Restaurant/daily-input/马连道`
+- Python：`/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python`
+- launchd watcher：必须使用项目 `.venv/bin/python`，不要回退到 `/usr/bin/python3`
+- Git 远程代理：当前本机端口是 `127.0.0.1:7890`，旧端口 `127.0.0.1:7897` 曾导致 fetch/push 失败
+
+如需 Git 远程操作，优先使用临时代理，不修改全局配置：
+
+```bash
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 fetch origin main
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push origin main
 ```
 
 进入项目后，修改任何功能前必须先阅读：
@@ -229,6 +255,8 @@ crontab -l
 - `docs/WORKFLOWS.md`
 
 如果要修改功能，先向用户说明方案、影响范围和验证方式，再动代码。不要打印 `.env` 敏感值，不要直接写入 crontab，不要把真实数据加入 git。
+
+watcher 自动流程不应该自动 git commit/push。任何 Git 提交和推送必须由用户确认后执行，且只允许 `git add <具体文件>`。
 
 ---
 

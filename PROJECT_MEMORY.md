@@ -29,6 +29,36 @@ Git 状态：
 - 已完成首次安全提交。
 - 已 push 到 GitHub private repo。
 - `.env`、真实 `store_history.csv`、真实日报 JSON、`logs/`、Excel、parquet、输出图均已通过 `.gitignore` 排除。
+- 2026-06-09 新电脑迁移修复已完成并 push：项目使用独立 `.venv`，launchd watcher 使用 `.venv/bin/python`，2026-06-08 日报已重跑成功并推送飞书，旧的 83 个 watcher 失败日志 commits 已清理。
+
+### 新电脑环境（2026-06-09）
+
+- 项目路径：`/Users/ming/Restaurant/restaurant-ai-bot`
+- 日报输入目录：`/Users/ming/Restaurant/daily-input/马连道`
+- Python 虚拟环境：`/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python`
+- launchd watcher：`~/Library/LaunchAgents/com.restaurant.daily-watcher.plist` 的 `ProgramArguments` 使用项目 `.venv/bin/python` 执行 `watch_daily_folder.py`
+- 当前本机代理端口：`127.0.0.1:7890`
+- 旧代理端口 `127.0.0.1:7897` 曾导致 `fetch/push` 失败，不要继续误用
+
+进入项目后的最小健康检查：
+
+```bash
+git status
+which python
+.venv/bin/python -c "import openai, pydantic, pydantic_core, pandas, PIL"
+scripts/status_watcher_launchd.sh
+git config --get http.proxy
+git config --get https.proxy
+```
+
+Git 远程操作如需代理，优先使用临时 `7890` 代理，不修改全局配置：
+
+```bash
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 fetch origin main
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push origin main
+```
+
+watcher 自动流程不应自动 `git commit` / `git push`。Git 提交、推送必须由用户确认后执行，且只能 `git add <具体文件>`。
 
 ---
 
@@ -104,7 +134,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] 飞书互动卡片：红/黄/绿标题 + KPI 4 列 + 诊断 2×2 + 建议列表
 - [x] matplotlib 中文字体修复（Arial Unicode MS / STHeiti）
 - [x] `image_to_excel.py`：Claude 读图 → JSON → 标准 Excel
-- [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态 → git commit/push
+- [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态；Git commit/push 必须由用户确认后执行
 - [x] `watch_daily_folder.py`：监听 `/Users/ming/Restaurant/daily-input/马连道` 新截图并自动触发一键日报
 - [x] 默认日报截图输入目录已迁出 Desktop：`/Users/ming/Restaurant/daily-input/马连道`
 - [x] 日报业务日期必须来自图片表头/真实营业数据；图片表头日期识别失败时必须中止；不允许为了凑周报或补齐日期改写日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期
@@ -130,7 +160,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] 周报自动化已改为日报成功后的条件触发，不使用 crontab
 - [x] launchd 日报监听脚本已具备安装、状态查看、卸载能力
 - [x] 当前机器上 `com.restaurant.daily-watcher` plist 已存在且服务处于 loaded/running
-- [x] 当前监听服务已重载到 `/Users/ming/Restaurant/daily-input/马连道`；历史日志中可能仍有旧 Desktop 路径残留，但不再新增
+- [x] 当前监听服务已重载到 `/Users/ming/Restaurant/daily-input/马连道`，并使用项目 `.venv/bin/python`；历史日志中可能仍有旧 Desktop 路径残留，但不再新增
 
 ### 数据文件与状态
 - [x] `data/data_schema.json`：字段定义 + 告警阈值
@@ -171,6 +201,14 @@ scripts/uninstall_watcher_launchd.sh
 ```
 
 当前状态：`com.restaurant.daily-watcher` 已安装并 loaded/running。因为之前服务曾使用 Desktop 路径，若日志继续出现 `PermissionError: Operation not permitted: '/Users/ming/Desktop/临时/马连道'`，重新执行安装脚本即可让 launchd 重载新版默认目录。
+
+当前新电脑 watcher 使用：
+
+```text
+/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python
+```
+
+若 `scripts/status_watcher_launchd.sh` 或 plist 显示 `/usr/bin/python3`，需要重新执行 `scripts/install_watcher_launchd.sh` 重载。
 
 ### 周报自动触发（不依赖 crontab）
 
@@ -378,14 +416,14 @@ grep "目标日期" data/pipeline_log.csv
 
 本次 `2026-05-25` 到 `2026-05-31` 周报看板图片已成功推送到飞书。关键经验：
 
-- Codex 环境可能无法访问 Mac 本机代理 `127.0.0.1:7897`，涉及图片上传推送时优先在 Mac 本机 Terminal 执行。
+- Codex 环境可能无法访问 Mac 本机代理；当前新电脑代理端口是 `127.0.0.1:7890`，旧端口 `127.0.0.1:7897` 不要再用。
 - 推送前 `.env` 需要配置 `FEISHU_WEBHOOK`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`，但任何文档、日志和提交信息都不得记录真实值。
 - 如果 Python `requests` 无法解析 `open.feishu.cn`，但 `curl` 可以访问，优先怀疑 Python 代理或 DNS 路径问题。
 - 本机 Terminal 执行前可设置：
 
 ```bash
-export HTTP_PROXY=http://127.0.0.1:7897
-export HTTPS_PROXY=http://127.0.0.1:7897
+export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7890
 ```
 
 成功命令示例：

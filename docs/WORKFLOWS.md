@@ -77,7 +77,7 @@
 
 ### 目标
 
-把“截图 → Excel → 日报分析 → 飞书推送 → 状态更新 → git commit/push”固化成一个稳定入口，避免每次让新智能体重新扫描整个仓库或手工串命令。
+把“截图 → Excel → 日报分析 → 飞书推送 → 状态更新”固化成一个稳定入口，避免每次让新智能体重新扫描整个仓库或手工串命令。Git commit/push 必须由用户确认后执行，不属于 watcher 自动动作。
 
 ### 命令
 
@@ -135,13 +135,7 @@ python3 run_daily_report.py --image "/path/to/daily.png" --store 便宜坊马连
    - `feishu_pushed=true`
    - `feishu_push_success=true`
    - `report_file=output/report_MLD_YYYY-MM-DD.json`
-6. 自动执行指定文件提交和推送：
-
-```bash
-git add data/pipeline_state.json data/pipeline_log.csv
-git commit -m "日报推送完成：YYYY-MM-DD 便宜坊马连道"
-git push origin main
-```
+6. 输出建议提交文件和 `git status`，等待用户确认后再执行 Git 提交和推送。watcher 自动流程不应该自动 `git commit` / `git push`。
 
 7. 如果本次日报真实日期是周日，自动触发自然周周报条件检查：
    - 周报周期固定为周一到周日。
@@ -159,13 +153,7 @@ git push origin main
 - 设置 `feishu_pushed=false`。
 - 设置 `feishu_push_success=false`。
 - 将错误摘要写入 `error_message`。
-- 尝试提交并推送失败流水：
-
-```bash
-git add data/pipeline_log.csv
-git commit -m "记录日报失败：YYYY-MM-DD 便宜坊马连道"
-git push origin main
-```
+- 只记录本地失败流水，不自动提交和推送失败日志。失败日志是否提交必须由用户确认，避免 watcher 反复失败时产生大量无价值 commits。
 
 失败时不会把该日期标记为 `last_completed_date`。
 
@@ -225,7 +213,7 @@ scripts/install_watcher_launchd.sh
 
 plist 配置：
 
-- `ProgramArguments`: `/usr/bin/python3 /Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py`
+- `ProgramArguments`: `/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python /Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py`
 - `WorkingDirectory`: `/Users/ming/Restaurant/restaurant-ai-bot`
 - `StandardOutPath`: `/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log`
 - `StandardErrorPath`: `/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log`
@@ -234,7 +222,13 @@ plist 配置：
 
 安装脚本会自动创建 `/Users/ming/Restaurant/daily-input/马连道` 和日志目录，并自动 `launchctl unload/load` 或 `bootstrap/kickstart`，让服务立即生效。以后 macOS 登录后会自动监听。
 
-当前机器检查结果：`~/Library/LaunchAgents/com.restaurant.daily-watcher.plist` 已存在，`gui/501/com.restaurant.daily-watcher` 已 loaded/running。若最近日志仍显示旧路径 `/Users/ming/Desktop/临时/马连道` 的 `PermissionError`，说明运行中的服务需要重载；重新执行安装脚本即可刷新 plist 和进程。
+当前新电脑检查结果：`~/Library/LaunchAgents/com.restaurant.daily-watcher.plist` 已存在，watcher 使用项目 `.venv/bin/python`，监听 `/Users/ming/Restaurant/daily-input/马连道`。若最近日志仍显示旧路径 `/Users/ming/Desktop/临时/马连道` 的 `PermissionError`，或 plist 仍显示 `/usr/bin/python3`，说明运行中的服务需要重载；重新执行安装脚本即可刷新 plist 和进程。
+
+新电脑固定 Python 路径：
+
+```text
+/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python
+```
 
 查看服务状态：
 
@@ -264,6 +258,12 @@ python3 watch_daily_folder.py
 ```bash
 cd /Users/ming/Restaurant/restaurant-ai-bot
 nohup python3 watch_daily_folder.py >> logs/watch_daily_folder.log 2>&1 &
+```
+
+新电脑建议显式使用项目虚拟环境运行：
+
+```bash
+/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python watch_daily_folder.py
 ```
 
 默认参数：
@@ -356,6 +356,7 @@ scripts/status_watcher_launchd.sh
 - 监听脚本不改 `main.py`、`weekly_report.py` 或日报主链路。
 - 监听脚本只调用 `run_daily_report.py`。
 - 监听脚本不直接提交真实图片、Excel、图表、日志或 `store_history.csv`。
+- 监听脚本不应自动 `git commit` / `git push`；Git 提交必须由用户确认后执行。
 - `data/watch_state.json` 是本地运行态去重文件，不进入 Git。
 
 ---
@@ -566,14 +567,14 @@ python3 skills/weekly_dashboard/render_weekly_dashboard.py \
 
 本次 `2026-05-25` 到 `2026-05-31` 周报可视化看板图片已成功推送到飞书。经验如下：
 
-- Codex 环境可能无法访问 Mac 本机代理 `127.0.0.1:7897`，因此图片上传推送建议在 Mac 本机 Terminal 执行。
+- Codex 环境可能无法访问 Mac 本机代理；当前新电脑代理端口是 `127.0.0.1:7890`，旧端口 `127.0.0.1:7897` 不要再用。
 - 推送前 `.env` 需要配置 `FEISHU_WEBHOOK`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`，但不得打印、提交或写入真实值。
 - 如果 Python `requests` 无法解析 `open.feishu.cn`，但 `curl` 可以访问，说明可能是 Python 代理/DNS 路径问题。
 - 本机 Terminal 执行前可设置代理：
 
 ```bash
-export HTTP_PROXY=http://127.0.0.1:7897
-export HTTPS_PROXY=http://127.0.0.1:7897
+export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7890
 ```
 
 成功命令示例：

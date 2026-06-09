@@ -15,12 +15,32 @@
 ## 进入项目后必须立即执行
 
 ```bash
+git status
+which python
+.venv/bin/python -c "import openai, pydantic, pydantic_core, pandas, PIL"
+scripts/status_watcher_launchd.sh
+git config --get http.proxy
+git config --get https.proxy
 cat data/pipeline_state.json
 tail -n 5 data/pipeline_log.csv
-ls -la data/store_history.csv .env
+ls -la data/store_history.csv
 ```
 
-这三步告诉你：当前应处理哪一天、上次是否已推送、下一步动作是什么。**不需要用户再解释。**
+这些检查告诉你：Git 是否干净、当前 Python 是否可用、watcher 是否运行、Git 代理是否误指向旧端口、当前应处理哪一天、上次是否已推送、下一步动作是什么。**不要读取或打印 `.env` 内容。**
+
+### 新电脑环境（2026-06-09）
+
+- 项目路径：`/Users/ming/Restaurant/restaurant-ai-bot`
+- 日报输入目录：`/Users/ming/Restaurant/daily-input/马连道`
+- Python 路径：`/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python`
+- launchd watcher 必须使用项目 `.venv/bin/python`，不要回退到 `/usr/bin/python3`
+- 当前本机代理端口是 `127.0.0.1:7890`，不要误用旧端口 `127.0.0.1:7897`
+- 如需 Git 远程操作，优先用临时代理参数，不修改全局配置：
+
+```bash
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 fetch origin main
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push origin main
+```
 
 ---
 
@@ -114,26 +134,24 @@ python3 main.py --file data/便宜坊马连道_YYYY-MM-DD.xlsx
 
 **禁止 cat 全量文件。只用 grep 定位目标行，或追加新行。**
 
-### 7. git commit & push
+### 7. Git 提交与推送
 
-```bash
-git add data/pipeline_state.json data/pipeline_log.csv
-git commit -m "日报推送完成：YYYY-MM-DD 便宜坊马连道"
-git push origin main
-```
+日报自动流程结束后，先输出 `git status` 和建议提交文件，等待用户确认。未经用户确认，不执行 `git add`、`git commit`、`git push`。
 
 ---
 
-## 代码有任何修改，自动 git commit/push
+## 代码或文档有修改后的 Git 规则
 
-修改任何 `.py`、`.yaml`、`.md`、`.sh`、`.json` 文件后，完成后立即：
+修改任何 `.py`、`.yaml`、`.md`、`.sh`、`.json` 文件后，完成后必须先报告改动和 `git status`，等待用户确认后再提交：
 
 ```bash
 git status
 git add <具体文件名>     # 禁止 git add . 或 git add -A
 git commit -m "说明改动内容"
-git push origin main
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 push origin main
 ```
+
+watcher 自动流程不应该自动 git commit/push。Git 提交必须由用户确认后执行。
 
 ---
 
@@ -168,6 +186,8 @@ git push origin main
 - `git add .` 或 `git add -A`
 - 未经用户确认写入 crontab
 - cat 全量 `pipeline_log.csv`
+- watcher 自动执行 git commit/push
+- 未确认时修改全局 Git 代理配置
 
 ---
 
@@ -197,14 +217,14 @@ tail -n 5 data/pipeline_log.csv
 
 ### 周报看板飞书图片推送经验
 
-- Codex 环境可能无法访问 Mac 本机代理 `127.0.0.1:7897`，带图片上传的飞书推送建议在 Mac 本机 Terminal 执行。
+- Codex 环境可能无法访问 Mac 本机代理；当前新电脑代理端口是 `127.0.0.1:7890`，旧端口 `127.0.0.1:7897` 不要再用。
 - 推送前 `.env` 必须配置 `FEISHU_WEBHOOK`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`；不得打印或写入真实值。
 - 如果 Python `requests` 无法解析 `open.feishu.cn`，但 `curl` 可以访问，通常是 Python 代理/DNS 路径问题。
 - 本机 Terminal 执行前可设置：
 
 ```bash
-export HTTP_PROXY=http://127.0.0.1:7897
-export HTTPS_PROXY=http://127.0.0.1:7897
+export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7890
 ```
 
 成功命令示例：
