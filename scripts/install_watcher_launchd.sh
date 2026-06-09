@@ -4,6 +4,7 @@ set -euo pipefail
 LABEL="com.restaurant.daily-watcher"
 PROJECT_DIR="/Users/ming/Restaurant/restaurant-ai-bot"
 SCRIPT_PATH="/Users/ming/Restaurant/restaurant-ai-bot/watch_daily_folder.py"
+PYTHON_PATH="/Users/ming/Restaurant/restaurant-ai-bot/.venv/bin/python"
 INPUT_DIR="/Users/ming/Restaurant/daily-input/马连道"
 LOG_DIR="$PROJECT_DIR/logs"
 LOG_PATH="/Users/ming/Restaurant/restaurant-ai-bot/logs/watch_daily_folder.log"
@@ -25,7 +26,7 @@ cat > "$PLIST_PATH" <<PLIST
 
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/python3</string>
+    <string>$PYTHON_PATH</string>
     <string>$SCRIPT_PATH</string>
   </array>
 

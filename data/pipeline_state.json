@@ -1,11 +1,11 @@
 {
   "workflow_version": "1.0",
   "current_store_name": "便宜坊马连道",
-  "current_target_date": "2026-06-08",
-  "last_completed_date": "2026-06-07",
+  "current_target_date": "2026-06-09",
+  "last_completed_date": "2026-06-08",
   "last_completed_status": "done",
   "last_feishu_pushed": true,
   "next_action": "idle_all_done",
-  "updated_at": "2026-06-08T07:48:25+08:00",
+  "updated_at": "2026-06-09T07:57:31+08:00",
   "updated_by": "codex"
 }
