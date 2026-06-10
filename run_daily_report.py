@@ -519,10 +519,18 @@ def run_daily_report(args: argparse.Namespace) -> int:
         if weekly_state_changed and weekly_auto.WEEKLY_STATE.exists():
             commit_files.append(weekly_auto.WEEKLY_STATE)
         if getattr(args, "git_sync", False):
-            run_git_commit_push(
-                commit_files,
-                f"日报推送完成：{business_date} {args.store}",
-            )
+            # 业务推送已成功并落盘；Git 同步与日报主流程解耦，
+            # 失败只告警，不得把业务状态改成 failed、不得追加 failed 流水。
+            try:
+                run_git_commit_push(
+                    commit_files,
+                    f"日报推送完成：{business_date} {args.store}",
+                )
+            except Exception as git_exc:
+                print(
+                    f"[git] 警告: 日报业务已成功，Git 同步失败(不影响业务状态): {type(git_exc).__name__}: {git_exc}",
+                    file=sys.stderr,
+                )
         return 0
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
