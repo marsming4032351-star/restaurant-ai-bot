@@ -506,3 +506,34 @@ python3 scripts/render_manager_weekly_fusion.py \
 **文档：** `docs/date_and_metric_policy.md`、`docs/data_schema.md`。
 
 **注意（已知遗留）：** `store_history.csv` 仍有一条 2026-06-01 行（= 05-31 的旧污染重复，本任务不修改历史数据故保留）。明天真实 06-01 日报入主链路时，现有 `store_history_has_row` 守卫会因该行而拦截，需要 `--force` 或先由用户处理该污染行——属于既有数据问题，不在本次代码改造范围。
+
+## 15. 2026-06-19 经营驾驶舱接入飞书妙搭（DB 路线）
+
+**Why:** 要把每日 CSV 数据接进飞书妙搭的「经营驾驶舱」应用，实现每天自动更新、可视化展示，且页面分享出去要能正常交互。
+
+### 15.1 妙搭 DB 路线（最终采用）
+
+- 妙搭应用 `app_4kdvcqjv319yh` 已升级为 **DB+API 架构**：数据库表 `daily_sales` 作为驾驶舱的**数据底座**，前端经 `/api/sales` 读 DB 实时渲染。
+- `db_sync_dashboard.py` 负责把本地 CSV **全表镜像**同步到妙搭 `daily_sales`（`DELETE` 全表 + 重新 `INSERT`，本地 CSV 为唯一真相源，彻底幂等，绕开 UPSERT 方言差异）。数据库为**单环境**，数据在 `--env online`（dev 未初始化）。
+- 页面展示**读 DB，不再依赖静态 HTML 发布**。`publish_dashboard.py`（整页 `html-publish`）仅作手动回退——**日常勿用，会覆盖妙搭的 DB 动态前端**。
+- 日报流水线钩子：`run_daily_report.py --publish-dashboard` 在推送成功后调 `db_sync_dashboard.sync`，与主流程解耦、失败只告警（沿用 `--git-sync` 哲学）。字段映射见 `render_dashboard.py` 的 `build_rows()`（store_history 核心指标 + daily_facts 渠道明细；store_history 的折扣/占比是百分数需 ÷100）。
+
+### 15.2 API 响应缓存坑（本次踩过，重要）
+
+- 现象：页面只显示 6 月。**并不是 DB 缺 5 月**——`daily_sales` 实际已有 **25 条**（2026-05-24 ~ 2026-06-18，含 8 天 5 月）。
+- 真因：**浏览器/API 缓存了旧的 `/api/sales` 响应**（DB 还只有 17 条 6 月数据时的那版），缓存返回旧 17 条。后端代码本身无「当月过滤」（无参数即返回全部）。
+- 修复（妙搭侧 commit `847be49`）：增加**防缓存策略**（请求带时间戳 `_t` + `Cache-Control: no-cache`），并让标题/日期范围/缺失日期提示**动态适配真实数据范围**。排查类似「数据没更新」问题时，先怀疑缓存，别急着以为 DB 缺数据。
+
+### 15.3 binary 固化位置
+
+- 妙搭(apps 域)能力用的是特制 `lark-cli`，已固化在项目 **`bin/lark-cli-apps`**（另有同目录软链 `bin/lark-cli` 供其 git 凭证助手按命令名调用）。
+- 鉴权 token 存在 `$HOME`，**不随项目路径变化**；所需 scope：`spark:app:read` + `spark:app:write`。
+- `bin/lark-cli-apps` 已被 `.gitignore` 忽略，**不进 Git**（25MB）。
+- 换电脑或重新 clone 时需**重新放置该 binary**（或后续补一个安装脚本）；否则 `--publish-dashboard` 每日同步会因找不到 binary 失败。
+
+### 15.4 仓库边界（务必区分）
+
+- **两个独立仓库**：`restaurant-ai-bot`（日报，本仓库）与 `miaoda-dashboard-app`（妙搭 app 代码，`apps +init` 克隆到 `~/Restaurant/miaoda-dashboard-app`，远端 `miaoda-git.feishu.cn`）。
+- 日报仓库本次接入代码（`render_dashboard.py` / `db_sync_dashboard.py` / `publish_dashboard.py` / `run_daily_report.py` 钩子）已**本地 commit `5f0d0cd`，未 push**。
+- 妙搭 app 的**线上有效修复来自远端 `sprint/default`**，有效 commit 含 `847be49`；本地克隆已 `reset --hard` 对齐到该远端（曾有一个未 push 的作废本地 commit 已丢弃）。
+- **不要把两个仓库的 push/release 混在一起**：日报仓库 push 到 GitHub；妙搭 app 的「重新部署」=push 到它自己的 `sprint/default` + `apps +release-create`，是另一回事。
