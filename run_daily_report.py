@@ -13,6 +13,7 @@ import base64
 import csv
 import json
 import mimetypes
+import os
 import re
 import subprocess
 import sys
@@ -313,6 +314,21 @@ def run_git_commit_push(files: list[Path], message: str) -> None:
     subprocess.run(["git", "push", "origin", "main"], cwd=BASE_DIR, check=True)
 
 
+def publish_dashboard_safe(store: str, app_id: str, cli_bin: str) -> None:
+    """把当日 CSV 同步进妙搭 daily_sales 表（应用前端从该表实时读数）。
+
+    与日报主流程解耦，沿用 --git-sync 的设计哲学：业务推送已成功，仪表盘同步是
+    发布管理动作，失败只告警，绝不把日报业务状态改成 failed。
+
+    注意：妙搭应用已是 DB+API 架构，走 DB 同步（db_sync_dashboard）而非整页
+    html-publish——后者会覆盖掉妙搭的动态前端。publish_dashboard.py 仅作手动回退。
+    """
+    import db_sync_dashboard
+
+    db_sync_dashboard.sync(store, app_id=app_id, cli_bin=cli_bin)
+    print(f"[dashboard] 驾驶舱数据已同步进妙搭：{app_id}")
+
+
 def _pipeline_row(
     *,
     report_date: str,
@@ -531,6 +547,16 @@ def run_daily_report(args: argparse.Namespace) -> int:
                     f"[git] 警告: 日报业务已成功，Git 同步失败(不影响业务状态): {type(git_exc).__name__}: {git_exc}",
                     file=sys.stderr,
                 )
+        if getattr(args, "publish_dashboard", False):
+            # 仪表盘发布与日报主流程解耦；失败只告警，不影响业务状态。
+            try:
+                publish_dashboard_safe(args.store, args.dashboard_app_id, args.dashboard_cli)
+            except Exception as dash_exc:
+                print(
+                    f"[dashboard] 警告: 日报业务已成功，驾驶舱发布失败(不影响业务状态): "
+                    f"{type(dash_exc).__name__}: {dash_exc}",
+                    file=sys.stderr,
+                )
         return 0
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
@@ -572,6 +598,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--date", required=False, help="处理日期 YYYY-MM-DD；日报业务日期以图片表头识别结果为准")
     parser.add_argument("--force", action="store_true", help="允许重跑已推送日期，并覆盖历史重复记录")
     parser.add_argument("--git-sync", action="store_true", help="日报结束后自动 git commit/push；默认关闭")
+    parser.add_argument("--publish-dashboard", action="store_true", help="日报推送成功后把当日数据同步进妙搭 daily_sales 表；默认关闭")
+    parser.add_argument("--dashboard-app-id", default=os.environ.get("DASHBOARD_APP_ID", "app_4kdvcqjv319yh"), help="妙搭应用 ID")
+    parser.add_argument("--dashboard-cli", default=os.environ.get("LARK_APPS_CLI", str(BASE_DIR / "bin" / "lark-cli-apps")), help="支持 apps 域的 lark-cli 路径")
     return parser.parse_args()
 
 

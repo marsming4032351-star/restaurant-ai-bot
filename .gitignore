@@ -64,3 +64,6 @@ data/data_correction_log.md
 *.xlsx
 *.xls
 .env
+
+# 妙搭(apps域)lark-cli 二进制，本地工具，勿入库（25MB）
+bin/lark-cli-apps
