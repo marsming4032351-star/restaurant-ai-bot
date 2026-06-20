@@ -106,6 +106,8 @@ def run_report(image_path: Path, store: str, processing_date: str | None = None)
         str(image_path),
         "--store",
         store,
+        # 日报推送成功后把当日数据同步进妙搭 daily_sales 表（与主流程解耦、失败只告警）
+        "--publish-dashboard",
     ]
     if processing_date:
         cmd.extend(["--date", processing_date])
