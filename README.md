@@ -134,7 +134,12 @@ scripts/install_watcher_launchd.sh
 5. `image_to_excel.py` 写出标准 Excel：`data/便宜坊马连道_YYYY-MM-DD.xlsx`。
 6. `main.py` 执行解析、AI 诊断、图表生成、飞书日报卡片推送、历史写入。
 7. 成功后更新 `data/pipeline_state.json` 和 `data/pipeline_log.csv`；Git 提交/推送必须由用户确认后再执行。
-8. 如果当前运行日是周一，且本次真实日报日期是上一天（周日），则自动检查并推送上一自然周周报。
+8. **图片归位（不删除原图）**：
+   - 处理成功（OCR→数据→日报→飞书推送全部成功）后，原截图自动移动到 `/Users/ming/Restaurant/daily-archive/马连道/YYYY-MM/`，月份按**图片表头业务日期**分桶（从 `pipeline_log.csv` 反查，绝不用系统日期）。
+   - 处理失败时，原截图移动到 `daily-input/马连道/_failed_old/`，并在旁边写 `<图名>.png.log`（含退出码、stdout、stderr）便于排查；失败图不标记已处理，修好后重新投放可再次处理。
+   - 全程只移动、不删除、不覆盖（同名自动加时间戳后缀）。归档目录在仓库之外，不进 Git。
+   - 一次性把监听目录里历史已完成图片归档：`.venv/bin/python watch_daily_folder.py --archive-existing`。
+9. 如果当前运行日是周一，且本次真实日报日期是上一天（周日），则自动检查并推送上一自然周周报。
 
 日报业务日期必须来自图片表头/真实营业数据；图片表头日期识别失败时流程必须中止，不允许 fallback 到系统日期。不允许为了凑周报或补齐日期而修改日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实业务日期。周一只是触发时机，不是日报日期来源。
 

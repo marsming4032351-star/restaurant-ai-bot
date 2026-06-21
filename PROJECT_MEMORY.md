@@ -138,6 +138,7 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 - [x] `image_to_excel.py`：Claude 读图 → JSON → 标准 Excel
 - [x] `run_daily_report.py`：一键处理截图 → Excel → 日报 → 飞书 → pipeline 状态；默认不自动 Git 同步，只有显式 `--git-sync` 才允许 commit/push
 - [x] `watch_daily_folder.py`：监听 `/Users/ming/Restaurant/daily-input/马连道` 新截图并自动触发一键日报；子进程固定 `.venv/bin/python` 并强制使用 `7890` 代理
+- [x] 截图处理完自动归位（移动，绝不删除原图）：成功 → `~/Restaurant/daily-archive/马连道/YYYY-MM/`（月份取图片表头业务日期，从 `pipeline_log.csv` 反查，绝不用系统日期）；失败 → `daily-input/马连道/_failed_old/` 并写 `<图名>.png.log`（退出码+stdout+stderr），失败图不标记已处理可重投。只移动/不删除/不覆盖（同名加时间戳）；归档目录在仓库外，不进 Git。历史图片一次性归档：`watch_daily_folder.py --archive-existing`
 - [x] 默认日报截图输入目录已迁出 Desktop：`/Users/ming/Restaurant/daily-input/马连道`
 - [x] 日报业务日期必须来自图片表头/真实营业数据；图片表头日期识别失败时必须中止；不允许为了凑周报或补齐日期改写日报日期，也不允许用系统运行日期、文件创建日期、当前日期覆盖真实数据日期
 - [x] `run_daily_report.py --input-folder` 和 `watch_daily_folder.py --folder` 保留手动目录覆盖能力
